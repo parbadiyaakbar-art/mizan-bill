@@ -1,0 +1,96 @@
+name: Build Native Apps
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install Dependencies
+        run: npm install
+      - name: Build Web
+        run: npm run build
+      - name: Upload Web Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+
+  build-android:
+    needs: build-web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Dependencies
+        run: npm install
+      - name: Download Web Build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      - name: Capacitor Add Android
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+      - name: Capacitor Sync
+        run: npx cap sync android
+      - name: Configure Android SDK versions
+        run: |
+          if [ -f "android/variables.gradle" ]; then
+            sed -i 's/minSdkVersion = .*/minSdkVersion = 30/' android/variables.gradle
+            sed -i 's/targetSdkVersion = .*/targetSdkVersion = 34/' android/variables.gradle
+            sed -i 's/compileSdkVersion = .*/compileSdkVersion = 34/' android/variables.gradle
+          fi
+      - name: Build Android APK
+        run: |
+          cd android
+          ./gradlew assembleDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mizan-bill-android-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+  build-windows:
+    needs: build-web
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Dependencies
+        run: npm install
+      - name: Download Web Build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+      - name: Build Windows EXE
+        run: npm run electron:build
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: mizan-bill-windows-exe
+          path: dist-electron/*.exe
