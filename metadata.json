@@ -1,0 +1,6 @@
+{
+  "name": "Mizan Bill",
+  "description": "An enterprise billing and GST compliance platform for simplified financial reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

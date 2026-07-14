@@ -1,0 +1,134 @@
+{
+  "entities": {
+    "ShopSettings": {
+      "title": "ShopSettings",
+      "description": "Stores shop configuration.",
+      "type": "object",
+      "properties": {
+        "shopName": { "type": "string" },
+        "gstin": { "type": "string" },
+        "defaultInvoiceFormat": { "type": "string", "enum": ["Tax Invoice", "Bill of Supply"] },
+        "printPaperSize": { "type": "string", "enum": ["A4", "A5", "Thermal"] },
+        "currency": { "type": "string" }
+      },
+      "required": ["shopName", "defaultInvoiceFormat", "printPaperSize", "currency"]
+    },
+    "Party": {
+      "title": "Party",
+      "description": "Stores customers and suppliers for a shop.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["Customer", "Supplier"] },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "gstin": { "type": "string" },
+        "address": { "type": "string" },
+        "creditLimit": { "type": "number" },
+        "openingBalance": { "type": "number" },
+        "currentBalance": { "type": "number" }
+      },
+      "required": ["userId", "type", "name", "creditLimit", "openingBalance", "currentBalance"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Stores inventory products.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "barcode": { "type": "string" },
+        "hsnCode": { "type": "string" },
+        "category": { "type": "string" },
+        "costPrice": { "type": "number" },
+        "sellingPrice": { "type": "number" },
+        "currentStock": { "type": "number" },
+        "gstRate": { "type": "number" }
+      },
+      "required": ["userId", "name", "costPrice", "sellingPrice", "currentStock", "gstRate"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Stores invoices.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["Sales", "Purchase", "Quotation"] },
+        "partyId": { "type": "string" },
+        "date": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "paymentMode": { "type": "string", "enum": ["Cash", "UPI", "Bank Transfer", "Cheque", "Udhaar"] },
+        "subtotal": { "type": "number" },
+        "totalTax": { "type": "number" },
+        "flatDiscount": { "type": "number" },
+        "roundOff": { "type": "number" },
+        "freightCharges": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "amountPaid": { "type": "number" },
+        "status": { "type": "string", "enum": ["Draft", "Paid", "Unpaid", "Partial", "Overdue"] }
+      },
+      "required": ["userId", "type", "partyId", "date", "paymentMode", "subtotal", "totalTax", "flatDiscount", "roundOff", "freightCharges", "totalAmount", "amountPaid", "status"]
+    },
+    "InvoiceItem": {
+      "title": "InvoiceItem",
+      "description": "Stores line items for invoices.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "invoiceId": { "type": "string" },
+        "productId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "qty": { "type": "number" },
+        "rate": { "type": "number" },
+        "discountPercent": { "type": "number" },
+        "gstPercent": { "type": "number" },
+        "total": { "type": "number" }
+      },
+      "required": ["userId", "invoiceId", "productId", "itemName", "qty", "rate", "discountPercent", "gstPercent", "total"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Stores payment and expense transactions.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string", "enum": ["Expense", "Customer Payment", "Supplier Payment", "Stock Wastage", "Opening Balance"] },
+        "partyId": { "type": "string" },
+        "expenseName": { "type": "string" },
+        "expenseCategory": { "type": "string" },
+        "itemId": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentMode": { "type": "string", "enum": ["Cash", "UPI", "Bank Transfer", "Card"] },
+        "notes": { "type": "string" }
+      },
+      "required": ["userId", "date", "type", "amount", "paymentMode"]
+    }
+  },
+  "firestore": {
+    "/shopSettings/{userId}": {
+      "schema": { "$ref": "#/entities/ShopSettings" },
+      "description": "Shop settings per user."
+    },
+    "/parties/{partyId}": {
+      "schema": { "$ref": "#/entities/Party" },
+      "description": "Parties for a shop."
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Products for a shop."
+    },
+    "/invoices/{invoiceId}": {
+      "schema": { "$ref": "#/entities/Invoice" },
+      "description": "Invoices for a shop."
+    },
+    "/invoiceItems/{invoiceItemId}": {
+      "schema": { "$ref": "#/entities/InvoiceItem" },
+      "description": "Invoice items for a shop."
+    },
+    "/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "Transactions for a shop."
+    }
+  }
+}

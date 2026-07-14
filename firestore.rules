@@ -1,0 +1,118 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isDocumentOwner() {
+      return isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    function willBeOwner() {
+      return isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Admin Config: Read by anyone signed in, write by admin
+    match /admin_configs/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Users collection: owner can read/write their own, admin can do everything
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+      allow update: if isOwner(userId) && 
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status', 'shopId']);
+      allow create: if isSignedIn(); // Allow initial profile creation
+    }
+
+    // Business Settings: Document ID is the userId
+    match /business_settings/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+
+    // Collections that store userId field in the document
+    match /sales_invoices/{id} {
+      allow read, delete: if isDocumentOwner() || isAdmin();
+      allow create, update: if willBeOwner();
+    }
+
+    match /purchase_invoices/{id} {
+      allow read, delete: if isDocumentOwner() || isAdmin();
+      allow create, update: if willBeOwner();
+    }
+
+    match /activity_logs/{id} {
+      allow read, create: if isSignedIn() && (resource == null || resource.data.shopId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.shopId || isAdmin());
+    }
+
+    match /error_logs/{id} {
+      allow create: if isSignedIn();
+      allow read: if (isSignedIn() && request.auth.uid == resource.data.userId) || isAdmin();
+    }
+    
+    match /products/{id} {
+      allow read, delete: if isDocumentOwner();
+      allow create, update: if willBeOwner() && 
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['userId']) || !exists(resource));
+    }
+
+    match /contacts/{id} {
+      allow read, delete: if isDocumentOwner();
+      allow create, update: if willBeOwner();
+    }
+
+    match /supplier_payments/{id} {
+      allow read, delete: if isDocumentOwner();
+      allow create, update: if willBeOwner();
+    }
+
+    match /customer_payments/{id} {
+      allow read, delete: if isDocumentOwner();
+      allow create, update: if willBeOwner();
+    }
+
+    match /shop_expenses/{id} {
+      allow read, delete: if isDocumentOwner();
+      allow create, update: if willBeOwner();
+    }
+
+    match /stock_wastages/{id} {
+      allow read, delete: if isDocumentOwner();
+      allow create, update: if willBeOwner();
+    }
+
+    match /daily_cash_states/{id} {
+      allow read, delete: if isDocumentOwner();
+      allow create, update: if willBeOwner();
+    }
+
+    match /drafts/{id} {
+      // Draft IDs are prefixed with userId in the service
+      allow read, write: if isSignedIn() && id.startsWith(request.auth.uid);
+    }
+
+    match /security_alerts/{id} {
+      // Allow any signed-in user to log an alert, but only admins (if we had a role) or internal monitoring can read.
+      // For now, restrict read to none to prevent potential attackers from seeing what we know.
+      allow create: if isSignedIn();
+      allow read: if false; 
+    }
+  }
+}
