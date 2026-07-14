@@ -34,21 +34,26 @@ export default function Sales({ startCreating = false, shopId, userId }: { start
   }, [isCreating, shopId]);
 
   const handleExportCSV = () => {
-    const headers = ['Date', 'Invoice #', 'Client', 'Amount', 'Status', 'Due Date'];
-    const rows = invoices.map(inv => [
-      inv.date,
-      inv.id,
-      `"${inv.client}"`,
-      `"${inv.amount.replace(/,/g, '')}"`,
-      inv.status,
-      inv.due
-    ]);
+    // For detailed accounting, we export more comprehensive data
+    const headers = ['Date', 'Invoice #', 'Client', 'Phone', 'Amount', 'Status', 'Due Date'];
+    const rows = invoices.map(inv => {
+      const escapedClient = (inv.client || '').replace(/"/g, '""');
+      return [
+        inv.date,
+        inv.id,
+        `"${escapedClient}"`,
+        `"${inv.phone || ''}"`,
+        `"${inv.amount.toString().replace(/,/g, '')}"`,
+        inv.status,
+        inv.due
+      ];
+    });
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', 'sales_transactions.csv');
+    link.setAttribute('download', `sales_transactions_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
