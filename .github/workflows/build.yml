@@ -46,7 +46,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
       - name: Capacitor Add Android
         run: |
           if [ ! -d "android" ]; then
@@ -58,8 +58,8 @@ jobs:
         run: |
           if [ -f "android/variables.gradle" ]; then
             sed -i 's/minSdkVersion = .*/minSdkVersion = 30/' android/variables.gradle
-            sed -i 's/targetSdkVersion = .*/targetSdkVersion = 34/' android/variables.gradle
-            sed -i 's/compileSdkVersion = .*/compileSdkVersion = 34/' android/variables.gradle
+            sed -i 's/targetSdkVersion = .*/targetSdkVersion = 36/' android/variables.gradle
+            sed -i 's/compileSdkVersion = .*/compileSdkVersion = 36/' android/variables.gradle
           fi
       - name: Build Android APK
         run: |
