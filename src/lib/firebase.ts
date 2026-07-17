@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
+import { getFirestore, enableMultiTabIndexedDbPersistence } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
@@ -38,7 +38,7 @@ export const storage = getStorage(app);
 // Initialize persistence with a slight delay to prioritize main UI rendering
 const enablePersistence = async () => {
   try {
-    await enableIndexedDbPersistence(db);
+    await enableMultiTabIndexedDbPersistence(db);
     console.log('Firestore persistence enabled.');
   } catch (err: any) {
     if (err.code === 'failed-precondition') {

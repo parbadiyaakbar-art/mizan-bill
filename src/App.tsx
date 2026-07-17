@@ -46,6 +46,9 @@ import ExpensesWastageModal from './components/ExpensesWastageModal';
 
 import { isNative } from './utils/platform';
 
+import { SyncService, SyncStatus } from './services/SyncService';
+import { ShieldAlert, Wifi, Lock as LockIcon, AlertTriangle, LogOut } from 'lucide-react';
+
 export default function App() {
   const [currentView, setCurrentView] = useState<View>(isNative() ? 'dashboard' : 'landing');
   const [showExpensesModal, setShowExpensesModal] = useState(false);
@@ -57,6 +60,8 @@ export default function App() {
   const [userStatus, setUserStatus] = useState<'Active' | 'Suspended' | 'Blocked'>('Active');
   const [adminConfig, setAdminConfig] = useState<AdminConfig | null>(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
 
   // Use a ref to track currentView for the auth listener closure
   const viewRef = useRef<View>(currentView);
@@ -75,25 +80,14 @@ export default function App() {
 
     setLoading(true);
 
+    // Initial Sync Check
+    const status = SyncService.getSyncStatus();
+    setSyncStatus(status);
+
     // Safety timeout: If auth takes too long, stop loading to show the landing page
     const safetyTimeout = setTimeout(() => {
       setLoading(false);
     }, 5000);
-
-    if (isNative()) {
-      // Offline bypass for compiled apps
-      const localUser: AppUser = {
-        id: 'local-user',
-        email: 'offline@mizan.local',
-        role: 'Owner',
-        shopId: 'local-shop',
-        user_metadata: { full_name: 'Offline User' }
-      };
-      setUser(localUser);
-      setCurrentView('dashboard');
-      setLoading(false);
-      return;
-    }
 
     const unsubscribe = subscribeToAuth((mappedUser) => {
       clearTimeout(safetyTimeout);
@@ -114,6 +108,12 @@ export default function App() {
 
         setUser(mappedUser);
         
+        // Update sync timestamp if online after login
+        if (navigator.onLine) {
+          SyncService.updateSyncTimestamp();
+          setSyncStatus(SyncService.getSyncStatus());
+        }
+        
         // Instant view transition for auto-login (from Landing only)
         if (currentViewAtTime === 'landing') {
           setCurrentView('dashboard');
@@ -133,7 +133,6 @@ export default function App() {
     // Admin Config Listener
     const unsubAdmin = subscribeToAdminConfig((config) => {
       setAdminConfig(config);
-      // Logic for update notification could go here
     });
 
     return () => {
@@ -276,6 +275,46 @@ export default function App() {
     setShowOnboarding(false);
     setCurrentView('dashboard');
   };
+
+  if (syncStatus?.isLocked && user?.email !== 'parbadiyaakbar@gmail.com') {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-zinc-900 border border-red-500/30 rounded-3xl p-8 text-center space-y-6 shadow-[0_0_50px_rgba(239,68,68,0.1)]">
+          <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto border-2 border-red-500/20 animate-pulse">
+            <LockIcon className="w-10 h-10 text-red-500" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold text-white">Sync Required</h2>
+            <p className="text-zinc-400">
+              Internet connection required. You have been offline for more than 7 days. 
+              Please connect to the internet to verify your subscription and continue using the app.
+            </p>
+          </div>
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 flex items-center gap-3 text-left">
+            <Wifi className="w-5 h-5 text-indigo-500" />
+            <div>
+              <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold">Last Verified Sync</p>
+              <p className="text-white font-mono text-sm">{new Date(syncStatus.lastSync).toLocaleString()}</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl transition-all shadow-[0_0_20px_rgba(99,102,241,0.4)] flex items-center justify-center gap-2"
+          >
+            <Wifi className="w-5 h-5" />
+            Check Connection
+          </button>
+          <button 
+            onClick={handleLogout}
+            className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-2xl transition-all flex items-center justify-center gap-2"
+          >
+            <LogOut className="w-5 h-5" />
+            Logout
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -515,12 +554,36 @@ export default function App() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-indigo-500/30">
       <Sidebar 
         currentView={currentView} 
-        onViewChange={setCurrentView} 
-        onOpenExpensesModal={() => setShowExpensesModal(true)} 
+        onViewChange={(view) => {
+          setCurrentView(view);
+          setSidebarOpen(false);
+        }} 
+        onOpenExpensesModal={() => {
+          setShowExpensesModal(true);
+          setSidebarOpen(false);
+        }} 
         userRole={user.role}
         expiryDate={user.expiryDate}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
-      <Header onLogout={handleLogout} />
+      <Header onLogout={handleLogout} onMenuClick={() => setSidebarOpen(true)} />
+      {syncStatus?.isWarning && !syncStatus.isLocked && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40 w-full max-w-md px-4 animate-in slide-in-from-top duration-500">
+          <div className="bg-amber-500/10 border border-amber-500/20 backdrop-blur-xl p-4 rounded-2xl flex items-center gap-4 shadow-xl">
+            <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-amber-500">Sync Required</p>
+              <p className="text-xs text-zinc-400">
+                You've been offline for {Math.floor(syncStatus.daysSinceLastSync)} days. 
+                Sync online within <b>{syncStatus.daysRemaining} days</b> to avoid locking.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       {adminConfig && adminConfig.updateMessage && (
         <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-right duration-500">
           <div className="bg-indigo-600 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 max-w-md border border-indigo-400/30">
@@ -540,8 +603,8 @@ export default function App() {
           </div>
         </div>
       )}
-      <main className="ml-64 pt-16 min-h-screen">
-        <div className="p-8">
+      <main className="pt-16 min-h-screen">
+        <div className="p-4 sm:p-8">
           <Suspense fallback={
             <div className="flex flex-col items-center justify-center h-[50vh] space-y-4">
               <div className="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>

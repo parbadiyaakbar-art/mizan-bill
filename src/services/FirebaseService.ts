@@ -21,6 +21,7 @@ import {
   increment
 } from 'firebase/firestore';
 import { getPlatformMode } from '../utils/platform';
+import { SyncService } from './SyncService';
 
 const PLATFORM_MODE = getPlatformMode();
 
@@ -36,6 +37,7 @@ const prepareStorageAction = async () => {
     }
     // For mobile, we want to ensure we are actually connected to the server
     await enableNetwork(db);
+    SyncService.updateSyncTimestamp();
   }
 };
 
@@ -62,6 +64,10 @@ const finalizeStorageAction = async (collectionName: string, id: string, data: a
   // Dispatch a custom event to update the UI indicator for IndexedDB activity
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('indexeddb-write'));
+  }
+
+  if (navigator.onLine) {
+    SyncService.updateSyncTimestamp();
   }
 
   if (PLATFORM_MODE === 'PC_LOCAL_FIRST') {

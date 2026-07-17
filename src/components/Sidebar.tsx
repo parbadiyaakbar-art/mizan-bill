@@ -21,7 +21,8 @@ import {
   Cloud,
   HardDrive,
   RefreshCw,
-  ShieldAlert
+  ShieldAlert,
+  X
 } from 'lucide-react';
 import { View } from '../types';
 import { getPlatformMode } from '../utils/platform';
@@ -34,9 +35,11 @@ interface SidebarProps {
   onOpenExpensesModal?: () => void;
   userRole: 'Owner' | 'Staff' | 'Admin';
   expiryDate?: string;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-export default function Sidebar({ currentView, onViewChange, onOpenExpensesModal, userRole, expiryDate }: SidebarProps) {
+export default function Sidebar({ currentView, onViewChange, onOpenExpensesModal, userRole, expiryDate, isOpen, onClose }: SidebarProps) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
   const platformMode = getPlatformMode();
@@ -111,17 +114,36 @@ export default function Sidebar({ currentView, onViewChange, onOpenExpensesModal
   });
 
   return (
-    <aside className="fixed left-0 top-0 h-full flex flex-col w-64 border-r border-zinc-800 bg-zinc-950/80 backdrop-blur-xl z-20">
-      <div 
-        className="h-16 flex items-center px-6 border-b border-zinc-800 mb-4 cursor-pointer hover:bg-zinc-800/30 transition-colors"
-        onClick={() => onViewChange('shop-profile')}
-      >
-        <div className="w-8 h-8 rounded bg-indigo-500 text-white flex items-center justify-center mr-3 font-bold shadow-[0_0_15px_rgba(99,102,241,0.4)]">M</div>
-        <div>
-          <div className="text-xl font-bold text-indigo-400">Mizan Bill</div>
-          <div className="text-xs text-zinc-400">GST Management</div>
+    <>
+      {/* Sidebar Overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-all duration-300"
+          onClick={onClose}
+        />
+      )}
+
+      <aside className={`fixed left-0 top-0 h-full flex flex-col w-64 border-r border-zinc-800 bg-zinc-950 z-50 transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div 
+          className="h-16 flex items-center justify-between px-6 border-b border-zinc-800 mb-4"
+        >
+          <div 
+            className="flex items-center cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={() => onViewChange('shop-profile')}
+          >
+            <div className="w-8 h-8 rounded bg-indigo-500 text-white flex items-center justify-center mr-3 font-bold shadow-[0_0_15px_rgba(99,102,241,0.4)]">M</div>
+            <div>
+              <div className="text-xl font-bold text-indigo-400">Mizan Bill</div>
+              <div className="text-xs text-zinc-400">GST Management</div>
+            </div>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-2 text-zinc-400 hover:text-white"
+          >
+            <X size={20} />
+          </button>
         </div>
-      </div>
 
       {daysRemaining !== null && (
         <div className="px-4 mb-4">
@@ -271,5 +293,6 @@ export default function Sidebar({ currentView, onViewChange, onOpenExpensesModal
         </div>
       </div>
     </aside>
+    </>
   );
 }

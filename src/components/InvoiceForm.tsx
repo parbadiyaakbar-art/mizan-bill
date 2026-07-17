@@ -319,43 +319,41 @@ export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate =
         </div>
       )}
 
-      <div className="bg-zinc-900/60 border border-indigo-500/20 rounded-xl p-6 backdrop-blur-xl">
+      <div className="bg-zinc-900/60 border border-indigo-500/20 rounded-xl p-4 sm:p-6 backdrop-blur-xl">
         <h3 className="text-lg font-semibold text-zinc-100 mb-6">{isSales ? 'Customer' : 'Vendor'} Details</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">{isSales ? 'Customer' : 'Vendor'} Name</label>
-            <input type="text" value={partyName} onChange={(e) => setPartyName(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all" placeholder={isSales ? "Customer Name" : "Vendor Name"} />
+            <input type="text" value={partyName} onChange={(e) => setPartyName(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all text-sm sm:text-base" placeholder={isSales ? "Customer Name" : "Vendor Name"} />
           </div>
           <div>
-                      <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Mobile Number</label>
-            <input type="tel" value={partyMobile} onChange={handleMobileChange} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all font-mono" placeholder="9876543210" />
-          </div>
+            <input type="tel" value={partyMobile} onChange={handleMobileChange} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all font-mono text-sm sm:text-base" placeholder="9876543210" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">GSTIN</label>
-            <input type="text" value={gstin} onChange={(e) => setGstin(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all font-mono" placeholder="29XXXXX0000X0Z5" />
+            <input type="text" value={gstin} onChange={(e) => setGstin(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all font-mono text-sm sm:text-base" placeholder="29XXXXX0000X0Z5" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Previous Balance (₹)</label>
-            <input type="number" value={previousBalance || ''} onChange={(e) => setPreviousBalance(parseFloat(e.target.value) || 0)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all font-mono" placeholder="0.00" />
+            <input type="number" value={previousBalance || ''} onChange={(e) => setPreviousBalance(parseFloat(e.target.value) || 0)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all font-mono text-sm sm:text-base" placeholder="0.00" />
           </div>
-          <div className="lg:col-span-3">
+          <div className="sm:col-span-2 lg:col-span-3">
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Billing Address</label>
-            <textarea rows={2} value={billingAddress} onChange={(e) => setBillingAddress(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all resize-none" placeholder="Full address"></textarea>
+            <textarea rows={2} value={billingAddress} onChange={(e) => setBillingAddress(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all resize-none text-sm sm:text-base" placeholder="Full address"></textarea>
           </div>
         </div>
       </div>
 
-      <div className="bg-zinc-900/60 border border-indigo-500/20 rounded-xl p-6 backdrop-blur-xl">
+      <div className="bg-zinc-900/60 border border-indigo-500/20 rounded-xl p-4 sm:p-6 backdrop-blur-xl">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-lg font-semibold text-zinc-100">Invoice Details</h3>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
           {!isSales && (
             <div>
               <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Link PO</label>
-              <select value={linkedPO} onChange={(e) => setLinkedPO(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all">
+              <select value={linkedPO} onChange={(e) => setLinkedPO(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all text-sm">
                 <option value="">None</option>
                 <option value="PO-2023-089">PO-2023-089</option>
                 <option value="PO-2023-090">PO-2023-090</option>
@@ -365,7 +363,7 @@ export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate =
           {isSales ? (
             <div>
               <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Sales Rep</label>
-              <select value={salesRep} onChange={(e) => setSalesRep(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all">
+              <select value={salesRep} onChange={(e) => setSalesRep(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all text-sm">
                 <option value="">None</option>
                 <option value="John Doe">John Doe</option>
                 <option value="Jane Smith">Jane Smith</option>
@@ -375,7 +373,7 @@ export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate =
           ) : null}
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Link {isSales ? 'Credit' : 'Debit'} Note</label>
-            <select value={linkedNote} onChange={(e) => setLinkedNote(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all">
+            <select value={linkedNote} onChange={(e) => setLinkedNote(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all text-sm">
               <option value="">None</option>
               <option value="CN-001">CN-001 / DN-001</option>
               <option value="CN-002">CN-002 / DN-002</option>
@@ -383,15 +381,15 @@ export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate =
           </div>
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">{isSales ? 'Invoice' : 'Bill'} Number</label>
-            <input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all font-mono" placeholder={isSales ? "INV-001" : "BILL-001"} />
+            <input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all font-mono text-sm" placeholder={isSales ? "INV-001" : "BILL-001"} />
           </div>
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">{isSales ? 'Invoice' : 'Bill'} Date</label>
-            <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all [color-scheme:dark]" />
+            <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all [color-scheme:dark] text-sm" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Payment Mode</label>
-            <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all">
+            <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all text-sm">
               <option value="Cash">Cash</option>
               <option value="Bank Transfer">Bank Transfer</option>
               <option value="UPI">UPI</option>
@@ -401,7 +399,7 @@ export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate =
           {paymentMode === 'Credit' && (
             <div>
               <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Due Date</label>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all [color-scheme:dark]" />
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all [color-scheme:dark] text-sm" />
             </div>
           )}
         </div>

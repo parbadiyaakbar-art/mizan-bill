@@ -43,6 +43,11 @@ export default function Login({ onLogin }: LoginProps) {
       return;
     }
 
+    if (!agreedToLegal) {
+      setError('You must read and agree to the Terms of Service and Privacy Policy to proceed.');
+      return;
+    }
+
     if (isRegistering) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
@@ -51,10 +56,6 @@ export default function Login({ onLogin }: LoginProps) {
       }
       if (password.length < 6) {
         setError('Password must be at least 6 characters for security.');
-        return;
-      }
-      if (!agreedToLegal) {
-        setError('You must read and agree to the Terms of Service and Privacy Policy to proceed.');
         return;
       }
     }
@@ -124,6 +125,11 @@ export default function Login({ onLogin }: LoginProps) {
       return;
     }
     
+    if (!agreedToLegal) {
+      setError('You must agree to the Terms and Privacy Policy before signing in with Google.');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
     try {
@@ -266,45 +272,43 @@ export default function Login({ onLogin }: LoginProps) {
                 </div>
               </div>
 
-              {isRegistering && (
-                <div className="flex items-start gap-3 p-3 bg-indigo-500/5 border border-indigo-500/10 rounded-lg">
-                  <div className="pt-0.5">
-                    <input
-                      id="legal-agreement"
-                      type="checkbox"
-                      checked={agreedToLegal}
-                      onChange={(e) => setAgreedToLegal(e.target.checked)}
-                      className="h-4 w-4 text-indigo-500 focus:ring-indigo-500 border-zinc-700 rounded bg-zinc-900 cursor-pointer"
-                    />
-                  </div>
-                  <label htmlFor="legal-agreement" className="text-xs text-zinc-400 leading-relaxed cursor-pointer select-none">
-                    I have read and agree to the{' '}
-                    <button 
-                      type="button" 
-                      onClick={() => setShowLegal('terms')}
-                      className="text-indigo-400 hover:text-indigo-300 font-medium underline underline-offset-2"
-                    >
-                      Terms of Service
-                    </button>
-                    {' '}and{' '}
-                    <button 
-                      type="button" 
-                      onClick={() => setShowLegal('privacy')}
-                      className="text-indigo-400 hover:text-indigo-300 font-medium underline underline-offset-2"
-                    >
-                      Privacy Policy
-                    </button>.
-                    <span className="block mt-1 text-zinc-500 italic">
-                      Beta Phase: Regular manual data backups are mandatory.
-                    </span>
-                  </label>
+              <div className="flex items-start gap-3 p-3 bg-indigo-500/5 border border-indigo-500/10 rounded-lg">
+                <div className="pt-0.5">
+                  <input
+                    id="legal-agreement"
+                    type="checkbox"
+                    checked={agreedToLegal}
+                    onChange={(e) => setAgreedToLegal(e.target.checked)}
+                    className="h-4 w-4 text-indigo-500 focus:ring-indigo-500 border-zinc-700 rounded bg-zinc-900 cursor-pointer"
+                  />
                 </div>
-              )}
+                <label htmlFor="legal-agreement" className="text-xs text-zinc-400 leading-relaxed cursor-pointer select-none">
+                  I have read and agree to the{' '}
+                  <button 
+                    type="button" 
+                    onClick={() => setShowLegal('terms')}
+                    className="text-indigo-400 hover:text-indigo-300 font-medium underline underline-offset-2"
+                  >
+                    Terms of Service
+                  </button>
+                  {' '}and{' '}
+                  <button 
+                    type="button" 
+                    onClick={() => setShowLegal('privacy')}
+                    className="text-indigo-400 hover:text-indigo-300 font-medium underline underline-offset-2"
+                  >
+                    Privacy Policy
+                  </button>.
+                  <span className="block mt-1 text-zinc-500 italic">
+                    Beta Phase: Regular manual data backups are mandatory.
+                  </span>
+                </label>
+              </div>
 
               <div>
                 <button
                   type="submit"
-                  disabled={isLoading || !isFirebaseConfigured || (isRegistering && !agreedToLegal)}
+                  disabled={isLoading || !isFirebaseConfigured || !agreedToLegal}
                   className="w-full flex justify-center items-center py-2.5 px-4 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-zinc-950 focus:ring-indigo-500 transition-all shadow-[0_0_15px_rgba(79,70,229,0.4)] disabled:opacity-50 disabled:cursor-not-allowed group active:scale-[0.98]"
                 >
                   {isLoading ? (
@@ -328,7 +332,7 @@ export default function Login({ onLogin }: LoginProps) {
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
-                disabled={isLoading || !isFirebaseConfigured}
+                disabled={isLoading || !isFirebaseConfigured || !agreedToLegal}
                 className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-zinc-700 rounded-lg text-sm font-medium text-zinc-300 hover:bg-zinc-800 hover:border-zinc-600 transition-all disabled:opacity-50"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -350,6 +354,20 @@ export default function Login({ onLogin }: LoginProps) {
                   />
                 </svg>
                 Google
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setError('WhatsApp OTP login is currently in private beta. Please use Email or Google to continue.')}
+                disabled={isLoading || !isFirebaseConfigured || !agreedToLegal}
+                className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-emerald-500/30 rounded-lg text-sm font-medium text-emerald-500 hover:bg-emerald-500/10 hover:border-emerald-500/50 transition-all disabled:opacity-50"
+              >
+                <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
+                  <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                  </svg>
+                </div>
+                WhatsApp Quick Login
               </button>
             </form>
           </div>
