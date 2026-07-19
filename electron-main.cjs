@@ -12,13 +12,16 @@ function createWindow() {
     icon: path.join(__dirname, 'public/logo192.png')
   });
 
-  // In production, load the built index.html
-  if (app.isPackaged) {
-    win.loadFile(path.join(__dirname, 'dist/index.html'));
-  } else {
-    // In development, load the dev server
-    win.loadURL('http://localhost:3000');
-  }
+  // Clear WebView cache
+  win.webContents.session.clearCache().then(() => {
+    // In production, load the web app
+    if (app.isPackaged) {
+      win.loadURL('https://app.mizanbill.com/login');
+    } else {
+      // In development, load the dev server
+      win.loadURL('http://localhost:3000/login');
+    }
+  });
 }
 
 app.whenReady().then(createWindow);
