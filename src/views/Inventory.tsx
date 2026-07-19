@@ -4,6 +4,7 @@ import { Search, Plus, Package, Edit, Save, X, Filter, AlertCircle, Image as Ima
 import { Product, BusinessType } from '../types';
 import { compressImage, uploadFile, resolveStorageUrl } from '../services/StorageService';
 import { TableSkeleton } from '../components/Skeleton';
+import CsvImport from '../components/CsvImport';
 
 export default function Inventory({ shopId, userId }: { shopId: string, userId: string }) {
   const [products, setProducts] = useState<Product[]>([]);
@@ -91,6 +92,31 @@ export default function Inventory({ shopId, userId }: { shopId: string, userId: 
   const isFoodRelated = isGrocery || isWholesaler || isUniversal;
   const isHardGoods = isElectronics || isUniversal;
   const isWearables = isClothing || isUniversal;
+
+  const handleImportProducts = async (data: any[]) => {
+    try {
+      const parsedProducts = data.map(row => ({
+        name: row.name || row.Name || 'Unnamed Item',
+        description: row.description || row.Description || '',
+        price: parseFloat(row.price || row.Price) || 0,
+        purchasePrice: parseFloat(row.purchasePrice || row.PurchasePrice || row.cost) || 0,
+        stock: parseInt(row.stock || row.Stock || row.quantity) || 0,
+        minStock: parseInt(row.minStock || row.MinStock) || 5,
+        unit: row.unit || row.Unit || 'pcs',
+        hsnCode: row.hsnCode || row.HSNCode || '',
+        gstRate: parseInt(row.gstRate || row.GSTRate) || 0,
+        type: (row.type || row.Type || 'product').toLowerCase(),
+      }));
+      
+      for (const prod of parsedProducts) {
+        await db.saveProduct(userId, shopId, prod as any);
+      }
+      alert('Inventory imported successfully!');
+    } catch (error) {
+      console.error('Error importing:', error);
+      alert('Failed to import data. Please check CSV format.');
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -226,12 +252,7 @@ export default function Inventory({ shopId, userId }: { shopId: string, userId: 
         </div>
         
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => alert('Bulk Upload feature coming soon! Please prepare your CSV with columns: name, barcode, sellingPrice, costPrice, currentStock.')}
-            className="flex items-center gap-2 bg-zinc-800 text-zinc-300 px-4 py-2 rounded-lg font-medium hover:bg-zinc-700 transition-colors border border-zinc-700"
-          >
-            Import CSV
-          </button>
+          <CsvImport onImport={handleImportProducts} type="Inventory" disabled={loading} />
           <button
             onClick={() => {
               const defaults: Partial<Product> = { 

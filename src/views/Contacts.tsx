@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Users, Search, Plus, Phone, MapPin, Building2, Wallet, ArrowRightLeft, X } from 'lucide-react';
 
 import * as db from '../services/FirebaseService';
+import CsvImport from '../components/CsvImport';
 
 export default function Contacts({ shopId, userId }: { shopId: string, userId: string }) {
   const [activeTab, setActiveTab] = useState<'Customer' | 'Supplier'>('Customer');
@@ -50,6 +51,29 @@ export default function Contacts({ shopId, userId }: { shopId: string, userId: s
       setSupplierBalances(sLedger);
     }
     setIsLoading(false);
+  };
+
+  const handleImportContacts = async (data: any[]) => {
+    try {
+      const parsedContacts = data.map(row => ({
+        name: row.name || row.Name || 'Unnamed Contact',
+        phone: row.phone || row.Phone || row.mobile || '',
+        address: row.address || row.Address || '',
+        gstin: row.gstin || row.GSTIN || '',
+        type: (row.type || row.Type || activeTab).toString()
+      }));
+      
+      for (const contact of parsedContacts) {
+        // Save contact with proper type
+        const contactType = contact.type.toLowerCase() === 'supplier' ? 'Supplier' : 'Customer';
+        await db.saveContact(userId, { ...contact, type: contactType, shopId });
+      }
+      alert('Contacts imported successfully!');
+      fetchData(); // Refresh list
+    } catch (error) {
+      console.error('Error importing:', error);
+      alert('Failed to import data. Please check CSV format.');
+    }
   };
 
   useEffect(() => {
@@ -224,10 +248,13 @@ export default function Contacts({ shopId, userId }: { shopId: string, userId: s
               className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg pl-10 pr-4 py-2 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50"
             />
           </div>
-          <button className="flex items-center gap-2 bg-zinc-800 text-zinc-200 px-4 py-2 rounded-lg hover:bg-zinc-700 transition-colors cursor-not-allowed opacity-50" title="Adding manually is currently disabled. Contacts auto-create on invoice.">
-            <Plus size={18} />
-            <span>Add {activeTab === 'Customer' ? 'Customer' : 'Supplier'}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <CsvImport onImport={handleImportContacts} type="Contacts" disabled={isLoading} />
+            <button className="flex items-center gap-2 bg-zinc-800 text-zinc-200 px-4 py-2 rounded-lg hover:bg-zinc-700 transition-colors cursor-not-allowed opacity-50" title="Adding manually is currently disabled. Contacts auto-create on invoice.">
+              <Plus size={18} />
+              <span>Add {activeTab === 'Customer' ? 'Customer' : 'Supplier'}</span>
+            </button>
+          </div>
         </div>
 
         {/* List */}
