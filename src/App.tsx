@@ -35,6 +35,7 @@ const DailyCash = lazy(() => import('./views/DailyCash'));
 const Contacts = lazy(() => import('./views/Contacts'));
 const Inventory = lazy(() => import('./views/Inventory'));
 const AdminPanel = lazy(() => import('./views/AdminPanel'));
+const About = lazy(() => import('./views/About'));
 const Subscription = lazy(() => import('./views/Subscription'));
 const LegalPage = lazy(() => import('./views/LegalPage'));
 
@@ -50,7 +51,19 @@ import { SyncService, SyncStatus } from './services/SyncService';
 import { ShieldAlert, Wifi, Lock as LockIcon, AlertTriangle, LogOut } from 'lucide-react';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<View>(isNative() ? 'dashboard' : 'landing');
+  const getInitialView = (): View => {
+    if (isNative()) return 'login';
+    const path = window.location.pathname;
+    if (path === '/login') return 'login';
+    if (path === '/releases') return 'releases';
+    if (path === '/privacy-policy') return 'privacy-policy';
+    if (path === '/terms-of-service') return 'terms-of-service';
+    if (path === '/about') return 'about';
+    if (window.location.hostname === 'app.mizanbill.com') return 'login';
+    return 'landing';
+  };
+
+  const [currentView, setCurrentView] = useState<View>(getInitialView());
   const [showExpensesModal, setShowExpensesModal] = useState(false);
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,7 +112,7 @@ export default function App() {
         if (isAdminRoute && mappedUser.email !== 'parbadiyaakbar@gmail.com') {
           signOut().then(() => {
             setUser(null);
-            setCurrentView('landing');
+            setCurrentView('login');
             window.history.pushState({}, '', '/');
             setLoading(false);
           });
@@ -115,7 +128,7 @@ export default function App() {
         }
         
         // Instant view transition for auto-login (from Landing only)
-        if (currentViewAtTime === 'landing') {
+        if (currentViewAtTime === 'landing' || currentViewAtTime === 'login') {
           setCurrentView('dashboard');
         }
         
@@ -123,8 +136,8 @@ export default function App() {
         setTimeout(() => checkOnboarding(mappedUser), 0);
       } else {
         setUser(null);
-        if (currentViewAtTime !== 'releases' && currentViewAtTime !== 'login') {
-          setCurrentView('landing');
+        if (currentViewAtTime !== 'releases' && currentViewAtTime !== 'login' && currentViewAtTime !== 'privacy-policy' && currentViewAtTime !== 'terms-of-service') {
+          setCurrentView(window.location.hostname === 'app.mizanbill.com' || isNative() ? 'login' : 'landing');
         }
       }
       setLoading(false);
@@ -243,7 +256,7 @@ export default function App() {
   const handleLogout = async () => {
     await signOut();
     setUser(null);
-    setCurrentView('landing');
+    setCurrentView('login');
   };
 
   const handleOnboardingComplete = async (businessType: BusinessType | '', shopName: string, stateCode: string) => {
@@ -481,6 +494,8 @@ export default function App() {
           return <Inventory shopId={user.shopId} userId={user.id} />;
         case 'settings':
           return <Settings shopId={user.shopId} userId={user.id} />;
+        case 'about':
+          return <About />;
         case 'shop-profile':
           return <ShopProfile shopId={user.shopId} userId={user.id} />;
         case 'releases':
@@ -525,12 +540,12 @@ export default function App() {
           return <AdminPanel />;
         case 'privacy-policy':
           return <LegalPage type="privacy" onBack={() => {
-            setCurrentView(user ? 'dashboard' : 'landing');
+            setCurrentView(user ? 'dashboard' : 'login');
             window.history.pushState({}, '', '/');
           }} />;
         case 'terms-of-service':
           return <LegalPage type="terms" onBack={() => {
-            setCurrentView(user ? 'dashboard' : 'landing');
+            setCurrentView(user ? 'dashboard' : 'login');
             window.history.pushState({}, '', '/');
           }} />;
         default:

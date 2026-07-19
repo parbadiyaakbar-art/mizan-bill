@@ -40,7 +40,7 @@ export interface BugReport {
   resolved: boolean;
 }
 
-export type View = 'landing' | 'login' | 'dashboard' | 'sales' | 'purchases' | 'quotations' | 'gst' | 'users' | 'inventory' | 'settings' | 'customer-payments' | 'supplier-payments' | 'daily-cash' | 'shop-expenses' | 'stock-wastage' | 'contacts' | 'shop-profile' | 'releases' | 'admin' | 'privacy-policy' | 'terms-of-service';
+export type View = 'landing' | 'login' | 'dashboard' | 'sales' | 'purchases' | 'quotations' | 'gst' | 'users' | 'inventory' | 'settings' | 'customer-payments' | 'supplier-payments' | 'daily-cash' | 'shop-expenses' | 'stock-wastage' | 'contacts' | 'shop-profile' | 'releases' | 'admin' | 'privacy-policy' | 'terms-of-service' | 'about';
 
 // --- Database Schema Types ---
 
