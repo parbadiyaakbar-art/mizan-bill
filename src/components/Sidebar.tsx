@@ -22,7 +22,8 @@ import {
   HardDrive,
   RefreshCw,
   ShieldAlert,
-  X
+  X,
+  Info
 } from 'lucide-react';
 import { View } from '../types';
 import { getPlatformMode } from '../utils/platform';
@@ -102,6 +103,7 @@ export default function Sidebar({ currentView, onViewChange, onOpenExpensesModal
     { id: 'releases', label: 'Download Builds', icon: Smartphone },
     { id: 'admin', label: 'Admin Control', icon: ShieldAlert },
     { id: 'share-app', label: 'Refer a Friend', icon: Share2 },
+    { id: 'about', label: 'About App', icon: Info },
   ].filter(item => {
     if (userRole === 'Staff') {
       const restricted = ['gst', 'users', 'settings', 'shop-profile', 'admin'];
