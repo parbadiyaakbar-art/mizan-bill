@@ -92,6 +92,8 @@ jobs:
           path: dist/
       - name: Build Windows EXE
         run: npm run electron:build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
