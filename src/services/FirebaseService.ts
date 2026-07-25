@@ -11,17 +11,43 @@ import {
   doc, 
   setDoc, 
   getDoc, 
-  getDocFromCache, 
+  getDocFromCache, getDocsFromCache, 
   deleteDoc, 
   writeBatch,
   limit,
   Timestamp,
+  serverTimestamp,
   enableNetwork,
   waitForPendingWrites,
   increment
 } from 'firebase/firestore';
 import { getPlatformMode } from '../utils/platform';
 import { SyncService } from './SyncService';
+
+
+const LRUCache = new Map<string, {data: any, timestamp: number}>();
+const CACHE_TTL = 5 * 60 * 1000;
+
+
+export const SyncEvents = {
+  listeners: [] as ((isSyncing: boolean) => void)[],
+  subscribe(fn: (isSyncing: boolean) => void) {
+    this.listeners.push(fn);
+    return () => { this.listeners = this.listeners.filter(l => l !== fn); };
+  },
+  notify(isSyncing: boolean) {
+    this.listeners.forEach(fn => fn(isSyncing));
+  }
+};
+let syncCount = 0;
+const startSync = () => {
+  syncCount++;
+  if (syncCount === 1) SyncEvents.notify(true);
+};
+const endSync = () => {
+  syncCount = Math.max(0, syncCount - 1);
+  if (syncCount === 0) SyncEvents.notify(false);
+};
 
 const PLATFORM_MODE = getPlatformMode();
 
@@ -77,15 +103,20 @@ const finalizeStorageAction = async (collectionName: string, id: string, data: a
     // For PC, we just wait for the background sync to finish if it's currently online
     // but we don't block the UI for too long.
     if (navigator.onLine) {
+      startSync();
       waitForPendingWrites(db).catch(err => {
         console.warn('Background sync encountered a delay:', err);
+      }).finally(() => {
+        endSync();
       });
+    } else {
+      // It will sync later when online
     }
   }
 };
 
-export const subscribeToSalesInvoices = (userId: string, callback: (invoices: any[]) => void) => {
-  const q = query(collection(db, 'sales_invoices'), where('userId', '==', userId), orderBy('created_at', 'desc'));
+export const subscribeToSalesInvoices = (userId: string, callback: (invoices: any[]) => void, limitCount: number = 50) => {
+  const q = query(collection(db, 'sales_invoices'), where('userId', '==', userId), orderBy('created_at', 'desc'), limit(limitCount));
   return onSnapshot(q, (snapshot) => {
     callback(snapshot.docs.map(doc => invoiceMapper.toDomain({ id: doc.id, ...doc.data(), type: 'Sales' })));
   }, (err) => {
@@ -93,8 +124,8 @@ export const subscribeToSalesInvoices = (userId: string, callback: (invoices: an
   });
 };
 
-export const subscribeToQuotations = (userId: string, callback: (quotations: any[]) => void) => {
-  const q = query(collection(db, 'quotations'), where('userId', '==', userId), orderBy('created_at', 'desc'));
+export const subscribeToQuotations = (userId: string, callback: (quotations: any[]) => void, limitCount: number = 50) => {
+  const q = query(collection(db, 'quotations'), where('userId', '==', userId), orderBy('created_at', 'desc'), limit(limitCount));
   return onSnapshot(q, (snapshot) => {
     callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
   }, (err) => {
@@ -102,8 +133,8 @@ export const subscribeToQuotations = (userId: string, callback: (quotations: any
   });
 };
 
-export const subscribeToPurchaseInvoices = (userId: string, callback: (invoices: any[]) => void) => {
-  const q = query(collection(db, 'purchase_invoices'), where('userId', '==', userId), orderBy('created_at', 'desc'));
+export const subscribeToPurchaseInvoices = (userId: string, callback: (invoices: any[]) => void, limitCount: number = 50) => {
+  const q = query(collection(db, 'purchase_invoices'), where('userId', '==', userId), orderBy('created_at', 'desc'), limit(limitCount));
   return onSnapshot(q, (snapshot) => {
     callback(snapshot.docs.map(doc => invoiceMapper.toDomain({ id: doc.id, ...doc.data(), type: 'Purchase' })));
   }, (err) => {
@@ -111,12 +142,24 @@ export const subscribeToPurchaseInvoices = (userId: string, callback: (invoices:
   });
 };
 
-export const subscribeToProducts = (userId: string, callback: (products: any[]) => void) => {
-  const q = query(collection(db, 'products'), where('userId', '==', userId));
+export const subscribeToProducts = (shopId: string, callback: (products: any[]) => void) => {
+  const q = query(collection(db, 'products'), where('userId', '==', shopId), orderBy('updated_at', 'desc'));
   return onSnapshot(q, (snapshot) => {
-    callback(snapshot.docs.map(doc => productMapper.toDomain({ id: doc.id, ...doc.data() })));
+    callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+  });
+};
+
+export const subscribeToActivityLogs = (shopId: string, callback: (logs: any[]) => void, limitCount: number = 200) => {
+  const q = query(
+    collection(db, 'activity_logs'), 
+    where('shopId', '==', shopId), 
+    orderBy('timestamp', 'desc'), 
+    limit(limitCount)
+  );
+  return onSnapshot(q, (snapshot) => {
+    callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
   }, (err) => {
-    console.warn('Real-time sync error (Products):', err);
+    console.warn('Real-time sync error (ActivityLogs):', err);
   });
 };
 
@@ -245,13 +288,15 @@ export const getNextInvoiceNumber = async (shopId: string, type: 'Sales' | 'Purc
   }
 };
 
-export const logActivity = async (userId: string, shopId: string, action: string, details: any) => {
+export const logActivity = async (userId: string, shopId: string, action: string, details: any, reason?: string, staffName?: string) => {
   try {
     await addDoc(collection(db, 'activity_logs'), {
       userId,
       shopId,
       action,
       details,
+      reason: reason || '',
+      staffName: staffName || localStorage.getItem('mizan_user_name') || 'System',
       timestamp: new Date().toISOString()
     });
   } catch (err) {
@@ -304,12 +349,23 @@ export const saveSalesInvoice = async (userId: string, shopId: string, invoice: 
     });
     
     await finalizeStorageAction('sales_invoices', docRef.id, { ...invoice, invoiceNumber });
+    // Deduct stock
+    for (const item of invoice.items) {
+      if (item.productId) await updateProductStock(userId, shopId, item.productId, -item.qty);
+      else if (item.item) {
+         const prods = await getDocs(query(collection(db, 'products'), where('userId', '==', shopId)));
+         const p = prods.docs.find(d => d.data().name === item.item);
+         if (p) await updateProductStock(userId, shopId, p.id, -item.qty);
+      }
+    }
     return { id: docRef.id, invoiceNumber };
   } catch (err: any) {
     logError(userId, shopId, err.message, err.stack);
     console.error('Failed to save sales invoice:', err);
     throw err;
   }
+
+  
 };
 
 export const savePurchaseInvoice = async (userId: string, shopId: string, invoice: any) => {
@@ -331,12 +387,23 @@ export const savePurchaseInvoice = async (userId: string, shopId: string, invoic
     });
     
     await finalizeStorageAction('purchase_invoices', docRef.id, { ...invoice, invoiceNumber });
+    // Add stock
+    for (const item of invoice.items) {
+      if (item.productId) await updateProductStock(userId, shopId, item.productId, item.qty);
+      else if (item.item) {
+         const prods = await getDocs(query(collection(db, 'products'), where('userId', '==', shopId)));
+         const p = prods.docs.find(d => d.data().name === item.item);
+         if (p) await updateProductStock(userId, shopId, p.id, item.qty);
+      }
+    }
     return { id: docRef.id, invoiceNumber };
   } catch (err: any) {
     logError(userId, shopId, err.message, err.stack);
     console.error('Failed to save purchase invoice:', err);
     throw err;
   }
+
+  
 };
 
 export const saveQuotation = async (userId: string, shopId: string, quotation: any) => {
@@ -367,6 +434,8 @@ export const saveQuotation = async (userId: string, shopId: string, quotation: a
 };
 
 export const getSalesInvoices = async (userId: string, limitCount: number = 50) => {
+  
+
   try {
     const q = query(
       collection(db, 'sales_invoices'), 
@@ -374,8 +443,31 @@ export const getSalesInvoices = async (userId: string, limitCount: number = 50) 
       orderBy('created_at', 'desc'),
       limit(limitCount)
     );
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    let querySnapshot;
+    try {
+      querySnapshot = await getDocsFromCache(q);
+      if (querySnapshot.empty) {
+        startSync();
+        querySnapshot = await getDocs(q);
+        endSync();
+      } else {
+        // Background sync
+        startSync();
+        getDocs(q).then(snap => {
+           // We could cache it, but firestore does it automatically
+        }).finally(endSync);
+      }
+    } catch (e) {
+      startSync();
+      querySnapshot = await getDocs(q);
+      endSync();
+    }
+    
+    
+    const res = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    return res;
   } catch (err) {
     console.warn('Failed to fetch sales invoices. Client might be offline.', err);
     return [];
@@ -383,6 +475,8 @@ export const getSalesInvoices = async (userId: string, limitCount: number = 50) 
 };
 
 export const getPurchaseInvoices = async (userId: string, limitCount: number = 50) => {
+  
+
   try {
     const q = query(
       collection(db, 'purchase_invoices'), 
@@ -390,8 +484,31 @@ export const getPurchaseInvoices = async (userId: string, limitCount: number = 5
       orderBy('created_at', 'desc'),
       limit(limitCount)
     );
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    let querySnapshot;
+    try {
+      querySnapshot = await getDocsFromCache(q);
+      if (querySnapshot.empty) {
+        startSync();
+        querySnapshot = await getDocs(q);
+        endSync();
+      } else {
+        // Background sync
+        startSync();
+        getDocs(q).then(snap => {
+           // We could cache it, but firestore does it automatically
+        }).finally(endSync);
+      }
+    } catch (e) {
+      startSync();
+      querySnapshot = await getDocs(q);
+      endSync();
+    }
+    
+    
+    const res = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    return res;
   } catch (err) {
     console.warn('Failed to fetch purchase invoices. Client might be offline.', err);
     return [];
@@ -585,13 +702,40 @@ export const saveSupplierPayment = async (userId: string, payment: any) => {
   });
   await finalizeStorageAction('supplier_payments', docRef.id, payment);
   return docRef.id;
+
+  
 };
 
 export const getSupplierPayments = async (userId: string) => {
+  
+
   try {
     const q = query(collection(db, 'supplier_payments'), where('userId', '==', userId), orderBy('created_at', 'desc'));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    let querySnapshot;
+    try {
+      querySnapshot = await getDocsFromCache(q);
+      if (querySnapshot.empty) {
+        startSync();
+        querySnapshot = await getDocs(q);
+        endSync();
+      } else {
+        // Background sync
+        startSync();
+        getDocs(q).then(snap => {
+           // We could cache it, but firestore does it automatically
+        }).finally(endSync);
+      }
+    } catch (e) {
+      startSync();
+      querySnapshot = await getDocs(q);
+      endSync();
+    }
+    
+    
+    const res = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    return res;
   } catch (err) {
     console.warn('Failed to fetch supplier payments.', err);
     return [];
@@ -607,13 +751,40 @@ export const saveCustomerPayment = async (userId: string, payment: any) => {
   });
   await finalizeStorageAction('customer_payments', docRef.id, payment);
   return docRef.id;
+
+  
 };
 
 export const getCustomerPayments = async (userId: string) => {
+  
+
   try {
     const q = query(collection(db, 'customer_payments'), where('userId', '==', userId), orderBy('created_at', 'desc'));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    let querySnapshot;
+    try {
+      querySnapshot = await getDocsFromCache(q);
+      if (querySnapshot.empty) {
+        startSync();
+        querySnapshot = await getDocs(q);
+        endSync();
+      } else {
+        // Background sync
+        startSync();
+        getDocs(q).then(snap => {
+           // We could cache it, but firestore does it automatically
+        }).finally(endSync);
+      }
+    } catch (e) {
+      startSync();
+      querySnapshot = await getDocs(q);
+      endSync();
+    }
+    
+    
+    const res = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    return res;
   } catch (err) {
     console.warn('Failed to fetch customer payments.', err);
     return [];
@@ -629,13 +800,40 @@ export const saveShopExpense = async (userId: string, expense: any) => {
   });
   await finalizeStorageAction('shop_expenses', docRef.id, persistenceData);
   return docRef.id;
+
+  
 };
 
 export const getShopExpenses = async (userId: string) => {
+  
+
   try {
     const q = query(collection(db, 'shop_expenses'), where('userId', '==', userId), orderBy('created_at', 'desc'));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => expenseMapper.toDomain({ id: doc.id, ...doc.data() }));
+    
+    let querySnapshot;
+    try {
+      querySnapshot = await getDocsFromCache(q);
+      if (querySnapshot.empty) {
+        startSync();
+        querySnapshot = await getDocs(q);
+        endSync();
+      } else {
+        // Background sync
+        startSync();
+        getDocs(q).then(snap => {
+           // We could cache it, but firestore does it automatically
+        }).finally(endSync);
+      }
+    } catch (e) {
+      startSync();
+      querySnapshot = await getDocs(q);
+      endSync();
+    }
+    
+    
+    const res = querySnapshot.docs.map(doc => expenseMapper.toDomain({ id: doc.id, ...doc.data() }));
+    
+    return res;
   } catch (err) {
     console.warn('Failed to fetch shop expenses.', err);
     return [];
@@ -651,13 +849,40 @@ export const saveStockWastage = async (userId: string, wastage: any) => {
   });
   await finalizeStorageAction('stock_wastages', docRef.id, wastage);
   return docRef.id;
+
+  
 };
 
 export const getStockWastages = async (userId: string) => {
+  
+
   try {
     const q = query(collection(db, 'stock_wastages'), where('userId', '==', userId), orderBy('created_at', 'desc'));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    let querySnapshot;
+    try {
+      querySnapshot = await getDocsFromCache(q);
+      if (querySnapshot.empty) {
+        startSync();
+        querySnapshot = await getDocs(q);
+        endSync();
+      } else {
+        // Background sync
+        startSync();
+        getDocs(q).then(snap => {
+           // We could cache it, but firestore does it automatically
+        }).finally(endSync);
+      }
+    } catch (e) {
+      startSync();
+      querySnapshot = await getDocs(q);
+      endSync();
+    }
+    
+    
+    const res = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    return res;
   } catch (err) {
     console.warn('Failed to fetch stock wastages.', err);
     return [];
@@ -667,13 +892,40 @@ export const getStockWastages = async (userId: string) => {
 export const saveDailyCashState = async (userId: string, date: string, state: any) => {
   const docRef = doc(db, `daily_cash_states`, `${userId}_${date}`);
   await setDoc(docRef, { userId, date, ...state, updated_at: new Date().toISOString() }, { merge: true });
+
+  
 };
 
 export const getDailyCashStates = async (userId: string) => {
+  
+
   try {
     const q = query(collection(db, 'daily_cash_states'), where('userId', '==', userId));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    let querySnapshot;
+    try {
+      querySnapshot = await getDocsFromCache(q);
+      if (querySnapshot.empty) {
+        startSync();
+        querySnapshot = await getDocs(q);
+        endSync();
+      } else {
+        // Background sync
+        startSync();
+        getDocs(q).then(snap => {
+           // We could cache it, but firestore does it automatically
+        }).finally(endSync);
+      }
+    } catch (e) {
+      startSync();
+      querySnapshot = await getDocs(q);
+      endSync();
+    }
+    
+    
+    const res = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    return res;
   } catch (err) {
     console.warn('Failed to fetch daily cash states.', err);
     return [];
@@ -706,17 +958,44 @@ export const saveProduct = async (userId: string, shopId: string, product: any) 
     logError(userId, shopId, err.message, err.stack);
     throw err;
   }
+
+  
 };
 
 export const getProducts = async (userId: string, limitCount: number = 100) => {
+  
+
   try {
     const q = query(
       collection(db, 'products'), 
       where('userId', '==', userId),
       limit(limitCount)
     );
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => productMapper.toDomain({ id: doc.id, ...doc.data() }));
+    
+    let querySnapshot;
+    try {
+      querySnapshot = await getDocsFromCache(q);
+      if (querySnapshot.empty) {
+        startSync();
+        querySnapshot = await getDocs(q);
+        endSync();
+      } else {
+        // Background sync
+        startSync();
+        getDocs(q).then(snap => {
+           // We could cache it, but firestore does it automatically
+        }).finally(endSync);
+      }
+    } catch (e) {
+      startSync();
+      querySnapshot = await getDocs(q);
+      endSync();
+    }
+    
+    
+    const res = querySnapshot.docs.map(doc => productMapper.toDomain({ id: doc.id, ...doc.data() }));
+    
+    return res;
   } catch (err) {
     console.warn('Failed to fetch products.', err);
     return [];
@@ -750,13 +1029,40 @@ export const saveContact = async (userId: string, contact: any) => {
     await finalizeStorageAction('contacts', docRef.id, persistenceData);
     return docRef.id;
   }
+
+  
 };
 
 export const getContacts = async (userId: string) => {
+  
+
   try {
     const q = query(collection(db, 'contacts'), where('userId', '==', userId));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => contactMapper.toDomain({ id: doc.id, ...doc.data() }));
+    
+    let querySnapshot;
+    try {
+      querySnapshot = await getDocsFromCache(q);
+      if (querySnapshot.empty) {
+        startSync();
+        querySnapshot = await getDocs(q);
+        endSync();
+      } else {
+        // Background sync
+        startSync();
+        getDocs(q).then(snap => {
+           // We could cache it, but firestore does it automatically
+        }).finally(endSync);
+      }
+    } catch (e) {
+      startSync();
+      querySnapshot = await getDocs(q);
+      endSync();
+    }
+    
+    
+    const res = querySnapshot.docs.map(doc => contactMapper.toDomain({ id: doc.id, ...doc.data() }));
+    
+    return res;
   } catch (err) {
     console.warn('Failed to fetch contacts.', err);
     return [];
@@ -822,4 +1128,192 @@ export const restoreAllData = async (userId: string, data: any) => {
   if (data.settings) {
     await saveBusinessSettings(userId, data.settings);
   }
+};
+
+
+export const updateProductStock = async (userId: string, shopId: string, productId: string, quantityChange: number) => {
+  const docRef = doc(db, 'products', productId);
+  const snap = await getDoc(docRef);
+  if (snap.exists()) {
+    const data = snap.data();
+    const newStock = (data.currentStock || 0) + quantityChange;
+    await setDoc(docRef, { currentStock: newStock, updated_at: new Date().toISOString() }, { merge: true });
+    await logActivity(userId, shopId, 'STOCK_UPDATE', { productId, newStock, change: quantityChange });
+    await finalizeStorageAction('products', productId, { ...data, currentStock: newStock });
+  }
+};
+
+
+export const updateSalesInvoice = async (userId: string, shopId: string, invoiceId: string, updatedData: any, reason?: string, staffName?: string) => {
+  await prepareStorageAction();
+  const docRef = doc(db, 'sales_invoices', invoiceId);
+  const oldSnap = await getDoc(docRef);
+  
+  if (oldSnap.exists()) {
+    const oldData = oldSnap.data();
+    const productNames = [...new Set(oldData.items.map((i: any) => i.item).filter(Boolean))];
+    if (productNames.length > 0) {
+      const productsSnap = await getDocs(query(collection(db, 'products'), where('userId', '==', shopId), where('name', 'in', productNames)));
+      const productsMap = new Map(productsSnap.docs.map(d => [d.data().name, { id: d.id, ...d.data() }]));
+
+      for (const item of oldData.items) {
+        if (item.productId) await updateProductStock(userId, shopId, item.productId, item.qty);
+        else if (item.item) {
+          const p = productsMap.get(item.item);
+          if (p) await updateProductStock(userId, shopId, p.id, item.qty);
+        }
+      }
+    }
+  }
+
+  // Deduct new stock
+  const newProductNames = [...new Set(updatedData.items.map((i: any) => i.item).filter(Boolean))];
+  if (newProductNames.length > 0) {
+    const productsSnap = await getDocs(query(collection(db, 'products'), where('userId', '==', shopId), where('name', 'in', newProductNames)));
+    const productsMap = new Map(productsSnap.docs.map(d => [d.data().name, { id: d.id, ...d.data() }]));
+
+    for (const item of updatedData.items) {
+      if (item.productId) await updateProductStock(userId, shopId, item.productId, -item.qty);
+      else if (item.item) {
+        const p = productsMap.get(item.item);
+        if (p) await updateProductStock(userId, shopId, p.id, -item.qty);
+      }
+    }
+  }
+
+  const finalData = { ...(oldSnap.exists() ? oldSnap.data() : {}), ...updatedData, updated_at: serverTimestamp() };
+  await setDoc(docRef, finalData, { merge: true });
+  await logActivity(userId, shopId, 'UPDATE_SALES_INVOICE', { 
+    invoiceId, 
+    party: updatedData.party_name,
+    invoiceNumber: updatedData.invoiceNumber,
+    oldAmount: oldSnap.exists() ? oldSnap.data().totals?.invoiceTotal : null,
+    newAmount: updatedData.totals?.invoiceTotal
+  }, reason, staffName);
+  await finalizeStorageAction('sales_invoices', invoiceId, finalData);
+};
+
+export const deleteSalesInvoice = async (userId: string, shopId: string, invoiceId: string, reason?: string, staffName?: string) => {
+  await prepareStorageAction();
+  const docRef = doc(db, 'sales_invoices', invoiceId);
+  const oldSnap = await getDoc(docRef);
+  if (oldSnap.exists()) {
+    const oldData = oldSnap.data();
+    const productNames = [...new Set(oldData.items.map((i: any) => i.item).filter(Boolean))];
+    if (productNames.length > 0) {
+      const productsSnap = await getDocs(query(collection(db, 'products'), where('userId', '==', shopId), where('name', 'in', productNames)));
+      const productsMap = new Map(productsSnap.docs.map(d => [d.data().name, { id: d.id, ...d.data() }]));
+
+      for (const item of oldData.items) {
+        if (item.productId) await updateProductStock(userId, shopId, item.productId, item.qty);
+        else if (item.item) {
+          const p = productsMap.get(item.item);
+          if (p) await updateProductStock(userId, shopId, p.id, item.qty);
+        }
+      }
+    }
+  }
+  await deleteDoc(docRef);
+  await logActivity(userId, shopId, 'DELETE_SALES_INVOICE', { 
+    invoiceId,
+    invoiceNumber: oldSnap.exists() ? oldSnap.data().invoiceNumber : null,
+    amount: oldSnap.exists() ? oldSnap.data().totals?.invoiceTotal : null
+  }, reason, staffName);
+};
+
+export const updatePurchaseInvoice = async (userId: string, shopId: string, invoiceId: string, updatedData: any, reason?: string, staffName?: string) => {
+  await prepareStorageAction();
+  const docRef = doc(db, 'purchase_invoices', invoiceId);
+  const oldSnap = await getDoc(docRef);
+  
+  if (oldSnap.exists()) {
+    const oldData = oldSnap.data();
+    const productNames = [...new Set(oldData.items.map((i: any) => i.item).filter(Boolean))];
+    if (productNames.length > 0) {
+      const productsSnap = await getDocs(query(collection(db, 'products'), where('userId', '==', shopId), where('name', 'in', productNames)));
+      const productsMap = new Map(productsSnap.docs.map(d => [d.data().name, { id: d.id, ...d.data() }]));
+
+      for (const item of oldData.items) {
+        if (item.productId) await updateProductStock(userId, shopId, item.productId, -item.qty);
+        else if (item.item) {
+          const p = productsMap.get(item.item);
+          if (p) await updateProductStock(userId, shopId, p.id, -item.qty);
+        }
+      }
+    }
+  }
+
+  const newProductNames = [...new Set(updatedData.items.map((i: any) => i.item).filter(Boolean))];
+  if (newProductNames.length > 0) {
+    const productsSnap = await getDocs(query(collection(db, 'products'), where('userId', '==', shopId), where('name', 'in', newProductNames)));
+    const productsMap = new Map(productsSnap.docs.map(d => [d.data().name, { id: d.id, ...d.data() }]));
+
+    for (const item of updatedData.items) {
+      if (item.productId) await updateProductStock(userId, shopId, item.productId, item.qty);
+      else if (item.item) {
+        const p = productsMap.get(item.item);
+        if (p) await updateProductStock(userId, shopId, p.id, item.qty);
+      }
+    }
+  }
+
+  const finalData = { ...(oldSnap.exists() ? oldSnap.data() : {}), ...updatedData, updated_at: serverTimestamp() };
+  await setDoc(docRef, finalData, { merge: true });
+  await logActivity(userId, shopId, 'UPDATE_PURCHASE_BILL', { 
+    invoiceId, 
+    party: updatedData.party_name,
+    invoiceNumber: updatedData.invoiceNumber,
+    oldAmount: oldSnap.exists() ? oldSnap.data().totals?.invoiceTotal : null,
+    newAmount: updatedData.totals?.invoiceTotal
+  }, reason, staffName);
+  await finalizeStorageAction('purchase_invoices', invoiceId, finalData);
+};
+
+export const deletePurchaseInvoice = async (userId: string, shopId: string, invoiceId: string, reason?: string, staffName?: string) => {
+  await prepareStorageAction();
+  const docRef = doc(db, 'purchase_invoices', invoiceId);
+  const oldSnap = await getDoc(docRef);
+  if (oldSnap.exists()) {
+    const oldData = oldSnap.data();
+    const productNames = [...new Set(oldData.items.map((i: any) => i.item).filter(Boolean))];
+    if (productNames.length > 0) {
+      const productsSnap = await getDocs(query(collection(db, 'products'), where('userId', '==', shopId), where('name', 'in', productNames)));
+      const productsMap = new Map(productsSnap.docs.map(d => [d.data().name, { id: d.id, ...d.data() }]));
+
+      for (const item of oldData.items) {
+        if (item.productId) await updateProductStock(userId, shopId, item.productId, -item.qty);
+        else if (item.item) {
+          const p = productsMap.get(item.item);
+          if (p) await updateProductStock(userId, shopId, p.id, -item.qty);
+        }
+      }
+    }
+  }
+  await deleteDoc(docRef);
+  await logActivity(userId, shopId, 'DELETE_PURCHASE_BILL', { 
+    invoiceId,
+    invoiceNumber: oldSnap.exists() ? oldSnap.data().invoiceNumber : null,
+    amount: oldSnap.exists() ? oldSnap.data().totals?.invoiceTotal : null
+  }, reason, staffName);
+};
+
+
+export const updateQuotation = async (userId: string, shopId: string, invoiceId: string, updatedData: any) => {
+  await prepareStorageAction();
+  const docRef = doc(db, 'quotations', invoiceId);
+  const oldSnap = await getDoc(docRef);
+  await setDoc(docRef, { ...updatedData, updated_at: new Date().toISOString() }, { merge: true });
+  await logActivity(userId, shopId, 'UPDATE_QUOTATION', { invoiceId, party: updatedData.party_name });
+  
+  const finalData = { ...(oldSnap.exists() ? oldSnap.data() : {}), ...updatedData };
+  await finalizeStorageAction('quotations', invoiceId, finalData);
+};
+
+export const deleteQuotation = async (userId: string, shopId: string, invoiceId: string) => {
+  await prepareStorageAction();
+  const docRef = doc(db, 'quotations', invoiceId);
+  await deleteDoc(docRef);
+  await logActivity(userId, shopId, 'DELETE_QUOTATION', { invoiceId });
+  
+  
 };

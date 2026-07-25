@@ -1,14 +1,29 @@
-import { Plus, Search, Filter, Download, FileText, CheckCircle2, Clock, XCircle, MoreVertical } from 'lucide-react';
+import { Plus, Search, Filter, Download, FileText, CheckCircle2, Clock, XCircle, MoreVertical, Edit, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import * as db from '../services/FirebaseService';
 import InvoiceForm from '../components/InvoiceForm';
 import { TableSkeleton } from '../components/Skeleton';
+import ReasonPromptModal from '../components/ReasonPromptModal';
 
 export default function Sales({ startCreating = false, shopId, userId }: { startCreating?: boolean, shopId: string, userId: string }) {
   const [isCreating, setIsCreating] = useState(startCreating);
+  const [editingInvoice, setEditingInvoice] = useState<any>(null);
 
   const [invoices, setInvoices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [auditAction, setAuditAction] = useState<{ type: 'Edit' | 'Delete', invoice: any } | null>(null);
+  const [requireAudit, setRequireAudit] = useState(false);
+
+  useEffect(() => {
+    const checkSettings = async () => {
+      const settings = await db.getBusinessSettings(shopId);
+      if (settings?.requireReasonForEditDelete) {
+        setRequireAudit(true);
+      }
+    };
+    checkSettings();
+  }, [shopId]);
 
   useEffect(() => {
     if (isCreating) return;
@@ -22,6 +37,7 @@ export default function Sales({ startCreating = false, shopId, userId }: { start
         amount: b.totals?.invoiceTotal?.toFixed(2) || '0.00',
         status: b.payment_mode === 'Udhaar' ? 'Pending' : 'Paid',
         due: b.dueDate || '---',
+        raw: b,
         phone: b.party_mobile || ''
       }));
       setInvoices(formatted);
@@ -32,6 +48,66 @@ export default function Sales({ startCreating = false, shopId, userId }: { start
       if (unsubscribe) unsubscribe();
     };
   }, [isCreating, shopId]);
+
+  
+  const handleEdit = (inv: any) => {
+    const userRole = localStorage.getItem('mizan_user_role');
+    const isAdmin = userRole === 'Owner' || userRole === 'Admin';
+    
+    if (!isAdmin && requireAudit) {
+      setAuditAction({ type: 'Edit', invoice: inv });
+      return;
+    }
+
+    if (!isAdmin) {
+      alert('Only Admins can edit invoices.');
+      return;
+    }
+    
+    setEditingInvoice(inv.raw);
+    setIsCreating(true);
+  };
+
+  const handleDelete = async (inv: any) => {
+    const userRole = localStorage.getItem('mizan_user_role');
+    const isAdmin = userRole === 'Owner' || userRole === 'Admin';
+
+    if (!isAdmin && requireAudit) {
+      setAuditAction({ type: 'Delete', invoice: inv });
+      return;
+    }
+
+    if (!isAdmin) {
+      alert('Only Admins can delete invoices.');
+      return;
+    }
+
+    if (window.confirm('Are you sure you want to delete this invoice? Stock and ledger balances will be restored.')) {
+      try {
+        await db.deleteSalesInvoice(userId, shopId, inv.id);
+      } catch (e: any) {
+        alert('Failed to delete: ' + e.message);
+      }
+    }
+  };
+
+  const handleAuditConfirm = async (reason: string, staffName: string) => {
+    if (!auditAction) return;
+
+    if (auditAction.type === 'Delete') {
+      try {
+        await db.deleteSalesInvoice(userId, shopId, auditAction.invoice.id, reason, staffName);
+        setAuditAction(null);
+      } catch (e: any) {
+        alert('Failed to delete: ' + e.message);
+      }
+    } else {
+      // For Edit, we just proceed to the form but we'll need to pass the reason/staff down
+      setEditingInvoice({ ...auditAction.invoice.raw, auditReason: reason, auditStaffName: staffName });
+      setIsCreating(true);
+      setAuditAction(null);
+    }
+  };
 
   const handleExportCSV = () => {
     // For detailed accounting, we export more comprehensive data
@@ -61,7 +137,7 @@ export default function Sales({ startCreating = false, shopId, userId }: { start
   };
 
   if (isCreating) {
-    return <InvoiceForm type="sales" onBack={() => setIsCreating(false)} shopId={shopId} userId={userId} />;
+    return <InvoiceForm type="sales" onBack={() => { setIsCreating(false); setEditingInvoice(null); }} shopId={shopId} userId={userId} initialInvoice={editingInvoice} />;
   }
 
   if (isLoading) {
@@ -171,7 +247,8 @@ export default function Sales({ startCreating = false, shopId, userId }: { start
                       <button className="text-zinc-400 hover:text-blue-400 transition-colors" title="Send SMS" onClick={() => window.open(`sms:${inv.phone}?body=Here is your invoice ${inv.id} for amount ₹${inv.amount}.`, '_blank')}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
                       </button>
-                      <button className="text-zinc-500 hover:text-indigo-400 transition-colors ml-2"><MoreVertical size={18} /></button>
+                      <button onClick={() => handleEdit(inv)} className="text-zinc-400 hover:text-indigo-400 transition-colors ml-2" title="Edit"><Edit size={16} /></button>
+      <button onClick={() => handleDelete(inv)} className="text-zinc-400 hover:text-rose-400 transition-colors ml-2" title="Delete"><Trash2 size={16} /></button>
                     </td>
                   </tr>
                 ))}
@@ -180,6 +257,14 @@ export default function Sales({ startCreating = false, shopId, userId }: { start
           )}
         </div>
       </div>
+
+      <ReasonPromptModal
+        isOpen={!!auditAction}
+        onClose={() => setAuditAction(null)}
+        onConfirm={handleAuditConfirm}
+        title={auditAction?.invoice ? `Invoice #${auditAction.invoice.id} - ₹${auditAction.invoice.amount}` : ''}
+        actionType={auditAction?.type || 'Edit'}
+      />
     </div>
   );
 }

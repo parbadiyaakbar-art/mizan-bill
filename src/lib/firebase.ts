@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { getFirestore, enableMultiTabIndexedDbPersistence } from 'firebase/firestore';
+import { getFirestore, enableMultiTabIndexedDbPersistence, setLogLevel } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
@@ -34,6 +34,9 @@ setPersistence(auth, browserLocalPersistence).catch(err => console.error('Auth p
 
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
+// Suppress Firestore offline warnings from cluttering the console
+setLogLevel('silent');
 
 // Initialize persistence with a slight delay to prioritize main UI rendering
 const enablePersistence = async () => {

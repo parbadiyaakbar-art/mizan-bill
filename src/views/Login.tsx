@@ -156,7 +156,7 @@ export default function Login({ onLogin }: LoginProps) {
         <div className="hidden lg:flex w-1/2 bg-zinc-900/50 flex-col justify-between p-12 relative border-r border-indigo-500/10">
           <div className="relative z-10">
             <div className="flex items-center gap-3 mb-16">
-              <Building2 className="text-indigo-500 w-10 h-10" />
+              <img src="/Mizan_Bill_3D_Logo.png" alt="Mizan Bill Logo" className="w-12 h-12 object-contain" />
               <h1 className="text-3xl font-bold tracking-tight">Mizan Bill</h1>
             </div>
             <div className="space-y-6">
@@ -194,7 +194,7 @@ export default function Login({ onLogin }: LoginProps) {
           )}
           <div className="max-w-md w-full mx-auto space-y-8">
             <div className="lg:hidden flex items-center gap-2 mb-8">
-              <Building2 className="text-indigo-500 w-8 h-8" />
+              <img src="/Mizan_Bill_3D_Logo.png" alt="Mizan Bill Logo" className="w-10 h-10 object-contain" />
               <h1 className="text-2xl font-bold tracking-tight text-indigo-400">Mizan Bill</h1>
             </div>
 

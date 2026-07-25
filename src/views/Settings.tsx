@@ -16,6 +16,7 @@ export default function Settings({ shopId, userId }: { shopId: string, userId: s
   const [waAlerts, setWaAlerts] = useState(localStorage.getItem('mizan_wa_alerts') !== 'false');
   const [smsAlerts, setSmsAlerts] = useState(localStorage.getItem('mizan_sms_alerts') !== 'false');
   const [allowNegativeStock, setAllowNegativeStock] = useState(true);
+  const [requireReasonForEditDelete, setRequireReasonForEditDelete] = useState(true);
   const [timezone, setTimezone] = useState('Asia/Kolkata');
   const [shopName, setShopName] = useState('');
   const [currency, setCurrency] = useState('INR');
@@ -115,6 +116,7 @@ export default function Settings({ shopId, userId }: { shopId: string, userId: s
       if (settings) {
         if (settings.businessType) setBusinessType(settings.businessType as BusinessType);
         if (settings.allowNegativeStock !== undefined) setAllowNegativeStock(settings.allowNegativeStock);
+        if (settings.requireReasonForEditDelete !== undefined) setRequireReasonForEditDelete(settings.requireReasonForEditDelete);
         if (settings.timezone) setTimezone(settings.timezone);
         if (settings.shopName) setShopName(settings.shopName);
         if (settings.currency) setCurrency(settings.currency);
@@ -127,6 +129,7 @@ export default function Settings({ shopId, userId }: { shopId: string, userId: s
     await saveBusinessSettings(shopId, { 
       businessType, 
       allowNegativeStock, 
+      requireReasonForEditDelete,
       timezone, 
       shopName, 
       currency 
@@ -370,6 +373,24 @@ export default function Settings({ shopId, userId }: { shopId: string, userId: s
                            style={{ right: allowNegativeStock ? 0 : 'auto', left: allowNegativeStock ? 'auto' : 0, borderColor: allowNegativeStock ? '#6366f1' : '#52525b' }} 
                          />
                          <label className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${allowNegativeStock ? 'bg-indigo-500' : 'bg-zinc-700'}`}></label>
+                       </div>
+                     </label>
+                   </div>
+                   <div className="pt-4 border-t border-zinc-800">
+                     <label className="flex items-center justify-between cursor-pointer">
+                       <div>
+                         <span className="text-sm font-medium text-zinc-300">Staff Audit Trail</span>
+                         <p className="text-xs text-zinc-500 mt-0.5">Require mandatory reason & staff name for editing/deleting invoices.</p>
+                       </div>
+                       <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                         <input 
+                           type="checkbox" 
+                           checked={requireReasonForEditDelete} 
+                           onChange={(e) => setRequireReasonForEditDelete(e.target.checked)} 
+                           className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-indigo-500" 
+                           style={{ right: requireReasonForEditDelete ? 0 : 'auto', left: requireReasonForEditDelete ? 'auto' : 0, borderColor: requireReasonForEditDelete ? '#6366f1' : '#52525b' }} 
+                         />
+                         <label className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${requireReasonForEditDelete ? 'bg-indigo-500' : 'bg-zinc-700'}`}></label>
                        </div>
                      </label>
                    </div>

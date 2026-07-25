@@ -1,4 +1,4 @@
-import { Search, Bell, HelpCircle, LogOut, CloudOff, Database, CheckCircle2, Menu } from 'lucide-react';
+import { Search, Bell, HelpCircle, LogOut, CloudOff, Database, CheckCircle2, Menu, Keyboard } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 interface HeaderProps {
@@ -81,8 +81,9 @@ export default function Header({ onLogout, onMenuClick }: HeaderProps) {
         <button className="hover:text-indigo-400 transition-colors">
           <Bell size={20} />
         </button>
-        <button className="hover:text-indigo-400 transition-colors">
-          <HelpCircle size={20} />
+        <button onClick={() => window.dispatchEvent(new Event('open-shortcuts'))} className="hover:text-indigo-400 transition-colors flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-md px-2 py-1 text-xs">
+          <Keyboard size={14} />
+          <span className="hidden sm:inline">Shortcuts</span>
         </button>
         <button 
           onClick={onLogout}

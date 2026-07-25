@@ -51,16 +51,12 @@ export default function Inventory({ shopId, userId }: { shopId: string, userId: 
       setBusinessType(settings?.businessType || '');
     });
 
-    // Delay initialization to prioritize UI rendering
-    const timer = setTimeout(() => {
-      unsubscribe = db.subscribeToProducts(shopId, (prods) => {
-        setProducts(prods as Product[]);
-        setLoading(false);
-      });
-    }, 800);
+    unsubscribe = db.subscribeToProducts(shopId, (prods) => {
+      setProducts(prods as Product[]);
+      setLoading(false);
+    });
 
     return () => {
-      clearTimeout(timer);
       if (unsubscribe) unsubscribe();
     };
   }, [shopId]);

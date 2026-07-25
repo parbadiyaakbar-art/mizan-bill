@@ -90,9 +90,7 @@ export default function LandingPage({ onLogin, onViewReleases, onViewPrivacy, on
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(79,70,229,0.4)]">
-              <span className="font-bold text-xl italic">M</span>
-            </div>
+            <img src="/Mizan_Bill_3D_Logo.png" alt="Mizan Bill Logo" className="w-12 h-12 object-contain" />
             <h1 className="text-xl font-bold tracking-tight">Mizan Bill</h1>
           </div>
           
@@ -308,9 +306,7 @@ export default function LandingPage({ onLogin, onViewReleases, onViewPrivacy, on
       <footer className="py-20 px-6 border-t border-zinc-900">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-12">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-zinc-800 rounded-lg flex items-center justify-center">
-              <span className="font-bold text-sm italic">M</span>
-            </div>
+            <img src="/Mizan_Bill_3D_Logo.png" alt="Mizan Bill Logo" className="w-8 h-8 opacity-50 grayscale object-contain" />
             <h1 className="text-lg font-bold text-zinc-500 tracking-tight">Mizan Bill</h1>
           </div>
           

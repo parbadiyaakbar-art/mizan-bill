@@ -1,5 +1,5 @@
 import * as db from '../services/FirebaseService';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, Plus, Trash2, Save, Barcode } from 'lucide-react';
 
 import { BusinessType } from '../types';
@@ -9,6 +9,7 @@ import { BusinessType } from '../types';
 import { calculateInvoiceTotals, LineItem } from '../utils/calculations';
 
 interface InvoiceFormProps {
+  initialInvoice?: any;
   type: 'sales' | 'purchase';
   onBack: () => void;
   shopId: string;
@@ -16,13 +17,13 @@ interface InvoiceFormProps {
   isEstimate?: boolean;
 }
 
-export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate = false }: InvoiceFormProps) {
-  const [items, setItems] = useState<LineItem[]>([
+export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate = false, initialInvoice }: InvoiceFormProps) {
+  const [items, setItems] = useState<LineItem[]>(initialInvoice ? initialInvoice.items : [
     { id: '1', item: '', category: '', hsn: '', qty: 1, unit: 'Pcs', rate: 0, discount: 0, gst: 18, warehouse: 'Main Godown', batchNo: '', expiryDate: '' }
   ]);
   
-  const [paymentMode, setPaymentMode] = useState('Cash');
-  const [flatDiscount, setFlatDiscount] = useState(0);
+  const [paymentMode, setPaymentMode] = useState(initialInvoice ? initialInvoice.payment_mode : 'Cash');
+  const [flatDiscount, setFlatDiscount] = useState(initialInvoice?.totals?.flatDiscount || 0);
   
   const [stateCode, setStateCode] = useState('24'); // Default state
   
@@ -45,8 +46,8 @@ export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate =
   const [previousBalance, setPreviousBalance] = useState(0);
 
   // General Details
-  const [partyName, setPartyName] = useState('');
-  const [partyMobile, setPartyMobile] = useState('');
+  const [partyName, setPartyName] = useState(initialInvoice?.party_name || '');
+  const [partyMobile, setPartyMobile] = useState(initialInvoice?.party_mobile || '');
   const [allContacts, setAllContacts] = useState<any[]>([]);
 
   useEffect(() => {
@@ -72,6 +73,20 @@ export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate =
     fetchProducts();
   }, [shopId]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+S: Save Invoice
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+      // Ctrl+P is handled natively by the browser, but we could prevent default and do our own if wanted
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [items, partyName, partyMobile, paymentMode, flatDiscount]); // add dependencies needed by handleSave
+
+
   const handleMobileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newMobile = e.target.value;
     setPartyMobile(newMobile);
@@ -84,17 +99,17 @@ export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate =
     }
   };
 
-  const [gstin, setGstin] = useState('');
-  const [billingAddress, setBillingAddress] = useState('');
+  const [gstin, setGstin] = useState(initialInvoice?.gstin || '');
+  const [billingAddress, setBillingAddress] = useState(initialInvoice?.billingAddress || '');
   
   // Invoice Details
-  const [invoiceNumber, setInvoiceNumber] = useState('');
-  const [invoiceDate, setInvoiceDate] = useState('');
-  const [dueDate, setDueDate] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState(initialInvoice?.invoiceNumber ? (initialInvoice.type === 'Sales' ? 'INV-' : 'BILL-') + String(initialInvoice.invoiceNumber).padStart(4, '0') : '');
+  const [invoiceDate, setInvoiceDate] = useState(initialInvoice?.date || new Date().toISOString().split('T')[0]);
+  const [dueDate, setDueDate] = useState(initialInvoice?.dueDate || '');
   
   // Notes & Terms
   const [terms, setTerms] = useState('');
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(initialInvoice?.notes || '');
 
   // Enhancements
   const [linkedPO, setLinkedPO] = useState('');
@@ -168,7 +183,22 @@ export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate =
 
   const updateItem = (id: string, field: keyof LineItem, value: string | number) => {
     setItems(prevItems => {
-      const updated = prevItems.map(i => i.id === id ? { ...i, [field]: value } : i);
+      const updated = prevItems.map(i => {
+        if (i.id === id) {
+          const newItem = { ...i, [field]: value };
+          if (field === 'item') {
+            const prod = allProducts.find(p => p.name === value || p.barcode === value);
+            if (prod) {
+              newItem.rate = isSales ? (prod.salesPrice || 0) : (prod.purchasePrice || 0);
+              newItem.hsn = prod.hsnCode || '';
+              newItem.gst = parseFloat(prod.taxRate) || 18;
+              if (!isSales && prod.category) newItem.category = prod.category;
+            }
+          }
+          return newItem;
+        }
+        return i;
+      });
       const isLast = updated[updated.length - 1].id === id;
       const lastItem = updated[updated.length - 1];
       if (isLast && lastItem.item && lastItem.rate > 0 && lastItem.qty > 0) {
@@ -178,7 +208,7 @@ export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate =
     });
   };
 
-  const calculateTotals = () => {
+  const totals = useMemo(() => {
     const isIntraState = !gstin || gstin.startsWith(stateCode);
     return calculateInvoiceTotals({
       items,
@@ -192,9 +222,7 @@ export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate =
       amountPaidUpfront,
       isSales: type === 'sales'
     });
-  };
-
-  const totals = calculateTotals();
+  }, [items, gstin, stateCode, isTaxInclusive, flatDiscount, freightCharges, handlingCharges, laborCharges, previousBalance, amountPaidUpfront, type]);
 
   const handleSave = async () => {
     if (paymentMode === 'Credit' || paymentMode === 'Credit/Udhaar' || paymentMode === 'Udhaar') {
@@ -239,16 +267,30 @@ export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate =
 
     try {
       if (!userId) throw new Error('User not logged in');
+      
+      let finalInvoiceData = { ...invoiceData };
 
       if (isEstimate) {
-        const result = await db.saveQuotation(userId, shopId, { ...invoiceData, status: 'Sent' });
-        setInvoiceNumber(`QT-${result.invoiceNumber.toString().padStart(4, '0')}`);
+        if (initialInvoice) {
+           await db.updateQuotation(userId, shopId, initialInvoice.id, finalInvoiceData);
+        } else {
+           const result = await db.saveQuotation(userId, shopId, { ...finalInvoiceData, status: 'Sent' });
+           setInvoiceNumber(`QT-${result.invoiceNumber.toString().padStart(4, '0')}`);
+        }
       } else if (isSales) {
-        const result = await db.saveSalesInvoice(userId, shopId, invoiceData);
-        setInvoiceNumber(`INV-${result.invoiceNumber.toString().padStart(4, '0')}`);
+        if (initialInvoice) {
+           await db.updateSalesInvoice(userId, shopId, initialInvoice.id, finalInvoiceData, initialInvoice.auditReason, initialInvoice.auditStaffName);
+        } else {
+           const result = await db.saveSalesInvoice(userId, shopId, finalInvoiceData);
+           setInvoiceNumber(`INV-${result.invoiceNumber.toString().padStart(4, '0')}`);
+        }
       } else {
-        const result = await db.savePurchaseInvoice(userId, shopId, invoiceData);
-        setInvoiceNumber(`BILL-${result.invoiceNumber.toString().padStart(4, '0')}`);
+        if (initialInvoice) {
+           await db.updatePurchaseInvoice(userId, shopId, initialInvoice.id, finalInvoiceData, initialInvoice.auditReason, initialInvoice.auditStaffName);
+        } else {
+           const result = await db.savePurchaseInvoice(userId, shopId, finalInvoiceData);
+           setInvoiceNumber(`BILL-${result.invoiceNumber.toString().padStart(4, '0')}`);
+        }
       }
       
       await db.clearDraft(userId, type);
@@ -324,7 +366,21 @@ export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate =
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">{isSales ? 'Customer' : 'Vendor'} Name</label>
-            <input type="text" value={partyName} onChange={(e) => setPartyName(e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all text-sm sm:text-base" placeholder={isSales ? "Customer Name" : "Vendor Name"} />
+            <input type="text" list="party-list" value={partyName} onChange={(e) => {
+              const val = e.target.value;
+              setPartyName(val);
+              const found = allContacts.find(c => c.name === val && c.type === (isSales ? 'Customer' : 'Supplier'));
+              if (found) {
+                if (found.phone) setPartyMobile(found.phone);
+                if (found.address) setBillingAddress(found.address);
+                if (found.gstin) setGstin(found.gstin);
+              }
+            }} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all text-sm sm:text-base" placeholder={isSales ? "Customer Name" : "Vendor Name"} />
+            <datalist id="party-list">
+              {allContacts.filter(c => c.type === (isSales ? 'Customer' : 'Supplier')).map(c => (
+                <option key={c.id} value={c.name}>{c.phone ? `(${c.phone})` : ''}</option>
+              ))}
+            </datalist>
           </div>
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Mobile Number</label>
@@ -430,7 +486,12 @@ export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate =
               {items.map((item, index) => (
                 <tr key={item.id}>
                   <td className="py-3 pr-4">
-                    <input type="text" value={item.item} onChange={(e) => updateItem(item.id, 'item', e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all" placeholder="Product or Service" />
+                    <input type="text" list="products-list" value={item.item} onChange={(e) => updateItem(item.id, 'item', e.target.value)} className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all" placeholder="Product or Service" />
+                    <datalist id="products-list">
+                      {allProducts.map(p => (
+                        <option key={p.id} value={p.name}>{p.barcode ? `[${p.barcode}] ` : ''}₹{isSales ? p.salesPrice : p.purchasePrice} ({p.currentStock} in stock)</option>
+                      ))}
+                    </datalist>
                   </td>
                   {!isSales && (
                     <td className="py-3 px-4">
@@ -684,6 +745,15 @@ export default function InvoiceForm({ type, onBack, shopId, userId, isEstimate =
             <Save size={18} /> Save {isSales ? 'Sales' : 'Purchase'} Invoice
           </button>
         </div>
+      </div>
+
+      
+      {/* Footer Quick Guide */}
+      <div className="fixed bottom-0 left-0 right-0 bg-zinc-950 border-t border-zinc-800 p-2 px-6 flex items-center justify-center gap-6 text-xs text-zinc-400 z-40 print-hidden hidden md:flex backdrop-blur-md bg-opacity-80">
+        <span><kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] font-mono mr-1 shadow-sm">F1</kbd> Help</span>
+        <span><kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] font-mono mr-1 shadow-sm">F2</kbd> New Invoice</span>
+        <span><kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] font-mono mr-1 shadow-sm">Ctrl+S</kbd> Save</span>
+        <span><kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] font-mono mr-1 shadow-sm">Ctrl+P</kbd> Print</span>
       </div>
 
       {showPreview && (

@@ -48,6 +48,8 @@ import ExpensesWastageModal from './components/ExpensesWastageModal';
 import { isNative } from './utils/platform';
 
 import { SyncService, SyncStatus } from './services/SyncService';
+import SyncIndicator from './components/SyncIndicator';
+import ShortcutsModal from './components/ShortcutsModal';
 import { ShieldAlert, Wifi, Lock as LockIcon, AlertTriangle, LogOut } from 'lucide-react';
 
 export default function App() {
@@ -75,6 +77,31 @@ export default function App() {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+
+  
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        setShowShortcutsModal(true);
+      }
+      if (e.key === 'F2') {
+        e.preventDefault();
+        if (user) setCurrentView('sales-new');
+      }
+    };
+    const handleOpenShortcuts = () => setShowShortcutsModal(true);
+    
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('open-shortcuts', handleOpenShortcuts);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('open-shortcuts', handleOpenShortcuts);
+    }
+  }, [user]);
+
+  
 
   // Use a ref to track currentView for the auth listener closure
   const viewRef = useRef<View>(currentView);
@@ -113,7 +140,7 @@ export default function App() {
           signOut().then(() => {
             setUser(null);
             setCurrentView('login');
-            window.history.pushState({}, '', '/');
+            if (!isNative()) window.history.pushState({}, '', '/');
             setLoading(false);
           });
           return;
@@ -129,7 +156,7 @@ export default function App() {
         
         // Instant view transition for auto-login (from Landing only)
         if (currentViewAtTime === 'landing' || currentViewAtTime === 'login') {
-          setCurrentView('dashboard');
+          setCurrentView('sales-new');
         }
         
         // Background tasks
@@ -249,7 +276,7 @@ export default function App() {
 
   const handleLogin = (userData: AppUser) => {
     setUser(userData);
-    setCurrentView('dashboard');
+    setCurrentView('sales-new');
     checkOnboarding(userData).catch(err => console.error('Onboarding check failed:', err));
   };
 
@@ -261,10 +288,17 @@ export default function App() {
 
   const handleOnboardingComplete = async (businessType: BusinessType | '', shopName: string, stateCode: string) => {
     if (user) {
-      const globalConfig = await getGlobalConfig();
-      const trialDays = globalConfig.trialDays || 15;
+      // Optimistic update
       const expiryDate = new Date();
-      expiryDate.setDate(expiryDate.getDate() + trialDays);
+      expiryDate.setDate(expiryDate.getDate() + 15);
+      getGlobalConfig().then(config => {
+        const tDays = config?.trialDays || 15;
+        if (tDays !== 15) {
+          const newExp = new Date();
+          newExp.setDate(newExp.getDate() + tDays);
+          saveBusinessSettings(user.shopId, { expiryDate: newExp.toISOString() });
+        }
+      }).catch(() => {});
 
       const settingsData: any = { 
         onboardingCompleted: true,
@@ -282,11 +316,11 @@ export default function App() {
         nextQuotationNo: 1,
         updated_at: new Date().toISOString()
       };
-      await saveBusinessSettings(user.shopId, settingsData);
+      saveBusinessSettings(user.shopId, settingsData).catch(e => console.error(e));
       setUser(prev => prev ? ({ ...prev, expiryDate: settingsData.expiryDate }) : null);
     }
     setShowOnboarding(false);
-    setCurrentView('dashboard');
+    setCurrentView('sales-new');
   };
 
   if (syncStatus?.isLocked && user?.email !== 'parbadiyaakbar@gmail.com') {
@@ -361,16 +395,14 @@ export default function App() {
           <nav className="border-b border-zinc-800 bg-zinc-950 p-6 flex justify-between items-center">
             <button onClick={() => {
               setCurrentView('landing');
-              window.history.pushState({}, '', '/');
+              if (!isNative()) window.history.pushState({}, '', '/');
             }} className="text-zinc-100 font-bold text-xl tracking-tight flex items-center gap-2">
-              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-                <span className="font-bold text-sm italic">M</span>
-              </div>
+              <img src="/Mizan_Bill_3D_Logo.png" alt="Mizan Bill Logo" className="w-8 h-8 object-contain" />
               Mizan Bill
             </button>
             <button onClick={() => {
               setCurrentView('login');
-              window.history.pushState({}, '', '/login');
+              if (!isNative()) window.history.pushState({}, '', '/login');
             }} className="px-6 py-2 bg-indigo-600 text-white rounded-full font-bold">Login</button>
           </nav>
           <Releases />
@@ -380,13 +412,13 @@ export default function App() {
     if (currentView === 'privacy-policy') {
       return <LegalPage type="privacy" onBack={() => {
         setCurrentView('landing');
-        window.history.pushState({}, '', '/');
+        if (!isNative()) window.history.pushState({}, '', '/');
       }} />;
     }
     if (currentView === 'terms-of-service') {
       return <LegalPage type="terms" onBack={() => {
         setCurrentView('landing');
-        window.history.pushState({}, '', '/');
+        if (!isNative()) window.history.pushState({}, '', '/');
       }} />;
     }
     return (
@@ -398,19 +430,19 @@ export default function App() {
         <LandingPage 
           onLogin={() => {
             setCurrentView('login');
-            window.history.pushState({}, '', '/login');
+            if (!isNative()) window.history.pushState({}, '', '/login');
           }} 
           onViewReleases={() => {
             setCurrentView('releases');
-            window.history.pushState({}, '', '/releases');
+            if (!isNative()) window.history.pushState({}, '', '/releases');
           }} 
           onViewPrivacy={() => {
             setCurrentView('privacy-policy');
-            window.history.pushState({}, '', '/privacy-policy');
+            if (!isNative()) window.history.pushState({}, '', '/privacy-policy');
           }}
           onViewTerms={() => {
             setCurrentView('terms-of-service');
-            window.history.pushState({}, '', '/terms-of-service');
+            if (!isNative()) window.history.pushState({}, '', '/terms-of-service');
           }}
         />
       </Suspense>
@@ -534,19 +566,19 @@ export default function App() {
           return <Contacts shopId={user.shopId} userId={user.id} />;
         case 'admin':
           if (user.email !== 'parbadiyaakbar@gmail.com') {
-            setCurrentView('dashboard');
+            setCurrentView('sales-new');
             return <Dashboard onViewChange={setCurrentView} shopId={user.shopId} userId={user.id} />;
           }
           return <AdminPanel />;
         case 'privacy-policy':
           return <LegalPage type="privacy" onBack={() => {
             setCurrentView(user ? 'dashboard' : 'login');
-            window.history.pushState({}, '', '/');
+            if (!isNative()) window.history.pushState({}, '', '/');
           }} />;
         case 'terms-of-service':
           return <LegalPage type="terms" onBack={() => {
             setCurrentView(user ? 'dashboard' : 'login');
-            window.history.pushState({}, '', '/');
+            if (!isNative()) window.history.pushState({}, '', '/');
           }} />;
         default:
           return <Dashboard onViewChange={setCurrentView} shopId={user.shopId} userId={user.id} />;
@@ -567,6 +599,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-indigo-500/30">
+      <SyncIndicator />
+      <ShortcutsModal isOpen={showShortcutsModal} onClose={() => setShowShortcutsModal(false)} />
       <Sidebar 
         currentView={currentView} 
         onViewChange={(view) => {

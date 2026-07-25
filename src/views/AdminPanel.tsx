@@ -15,22 +15,26 @@ import {
   Monitor,
   Send,
   Save,
-  Trash2
+  Trash2,
+  FileSearch,
+  History
 } from 'lucide-react';
 import { 
   subscribeToBetaUsers, 
   updateBetaUserStatus, 
   pushAdminConfig, 
   getAdminConfig, 
-  subscribeToBugReports
+  subscribeToBugReports,
+  subscribeToActivityLogs
 } from '../services/FirebaseService';
-import { BetaUser, AdminConfig, BugReport, BetaUserStatus } from '../types';
+import { BetaUser, AdminConfig, BugReport, BetaUserStatus, ActivityLog } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState<'users' | 'updates' | 'bugs' | 'maintenance'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'updates' | 'bugs' | 'audit'>('users');
   const [users, setUsers] = useState<BetaUser[]>([]);
   const [bugs, setBugs] = useState<BugReport[]>([]);
+  const [auditLogs, setAuditLogs] = useState<ActivityLog[]>([]);
   const [config, setConfig] = useState<AdminConfig>({
     latestVersion: '1.0.4',
     updateMessage: 'A new version is available with stability improvements.',
@@ -48,6 +52,11 @@ export default function AdminPanel() {
     const unsubBugs = subscribeToBugReports((data) => {
       setBugs(data as any);
     });
+
+    const shopId = localStorage.getItem('mizan_shop_id') || '';
+    const unsubAudit = subscribeToActivityLogs(shopId, (data) => {
+      setAuditLogs(data as any);
+    });
     
     getAdminConfig().then(data => {
       if (data) setConfig(data as any);
@@ -56,6 +65,7 @@ export default function AdminPanel() {
     return () => {
       unsubUsers();
       unsubBugs();
+      unsubAudit();
     };
   }, []);
 
@@ -117,6 +127,13 @@ export default function AdminPanel() {
             >
               <ShieldAlert size={16} className="inline mr-2" />
               Bug Logs
+            </button>
+            <button 
+              onClick={() => setActiveTab('audit')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'audit' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+            >
+              <History size={16} className="inline mr-2" />
+              Audit Trail
             </button>
           </div>
         </header>
@@ -349,6 +366,74 @@ export default function AdminPanel() {
                   ))}
                 </div>
               )}
+            </motion.div>
+          )}
+          {activeTab === 'audit' && (
+            <motion.div 
+              key="audit"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-6"
+            >
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-zinc-800/50 text-zinc-400 text-xs font-bold uppercase tracking-widest">
+                      <th className="px-6 py-4">Timestamp</th>
+                      <th className="px-6 py-4">User / Salesman</th>
+                      <th className="px-6 py-4">Action</th>
+                      <th className="px-6 py-4">Invoice Info</th>
+                      <th className="px-6 py-4">Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800">
+                    {auditLogs
+                      .filter(log => log.action.includes('INVOICE') || log.action.includes('BILL'))
+                      .map(log => (
+                      <tr key={log.id} className="hover:bg-zinc-800/30 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-zinc-200">{new Date(log.timestamp).toLocaleDateString()}</div>
+                          <div className="text-[10px] text-zinc-500">{new Date(log.timestamp).toLocaleTimeString()}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-zinc-200">{log.staffName || 'Admin'}</div>
+                          <div className="text-[10px] text-zinc-500 font-mono">ID: {log.userId.slice(0, 8)}...</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
+                            log.action.includes('DELETE') ? 'bg-rose-500/10 text-rose-500' : 'bg-indigo-500/10 text-indigo-500'
+                          }`}>
+                            {log.action.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-medium text-zinc-300">#{log.details?.invoiceNumber || 'N/A'}</div>
+                          <div className="text-[10px] text-zinc-500">
+                            {log.details?.oldAmount && log.details?.newAmount ? (
+                              <span>Amt: ₹{log.details.oldAmount} → ₹{log.details.newAmount}</span>
+                            ) : log.details?.amount ? (
+                              <span>Amt: ₹{log.details.amount}</span>
+                            ) : '---'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-xs text-zinc-400 italic max-w-xs truncate" title={log.reason}>
+                            "{log.reason || 'No reason provided'}"
+                          </p>
+                        </td>
+                      </tr>
+                    ))}
+                    {auditLogs.filter(log => log.action.includes('INVOICE') || log.action.includes('BILL')).length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-12 text-center text-zinc-500 italic">
+                          No audit logs found for invoice actions.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

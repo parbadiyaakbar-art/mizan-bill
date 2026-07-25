@@ -15,20 +15,49 @@ export default function Quotations({ startCreating = false, shopId, userId }: { 
     setLoading(true);
     const unsubscribe = db.subscribeToQuotations(shopId, (data) => {
       setQuotations(data.map(q => ({
+        id: q.id,
+        displayId: `QT-${q.invoiceNumber || 'NEW'}`,
         date: q.date || new Date().toISOString().split('T')[0],
-        id: `QT-${q.invoiceNumber || 'NEW'}`,
         client: q.party_name || 'Guest',
         gstin: q.party_gstin || '---',
         amount: q.totals?.invoiceTotal?.toFixed(2) || '0.00',
-        status: q.status || 'Sent'
+        status: q.status || 'Sent',
+        raw: q
       })));
       setLoading(false);
     });
     return () => unsubscribe();
   }, [isCreating, shopId]);
 
+  const [editingQuotation, setEditingQuotation] = useState<any>(null);
+
+  const handleEdit = (q: any) => {
+    const userRole = localStorage.getItem('mizan_user_role');
+    if (userRole !== 'Owner' && userRole !== 'Admin') {
+      alert('Only Admins can edit quotations.');
+      return;
+    }
+    setEditingQuotation(q.raw);
+    setIsCreating(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    const userRole = localStorage.getItem('mizan_user_role');
+    if (userRole !== 'Owner' && userRole !== 'Admin') {
+      alert('Only Admins can delete quotations.');
+      return;
+    }
+    if (window.confirm('Are you sure you want to delete this quotation?')) {
+      try {
+        await db.deleteQuotation(userId, shopId, id);
+      } catch (e: any) {
+        alert('Failed to delete: ' + e.message);
+      }
+    }
+  };
+
   if (isCreating) {
-    return <InvoiceForm type="sales" onBack={() => setIsCreating(false)} shopId={shopId} userId={userId} isEstimate={true} />;
+    return <InvoiceForm type="sales" onBack={() => { setIsCreating(false); setEditingQuotation(null); }} shopId={shopId} userId={userId} isEstimate={true} initialInvoice={editingQuotation} />;
   }
 
   if (loading) {
@@ -123,7 +152,7 @@ export default function Quotations({ startCreating = false, shopId, userId }: { 
                 {quotations.map((q, i) => (
                   <tr key={i} className={`border-b border-zinc-800 hover:bg-zinc-800/30 transition-colors ${q.status === 'Accepted' ? 'bg-teal-500/5' : ''}`}>
                     <td className="py-4 px-4 text-zinc-300">{q.date}</td>
-                    <td className={`py-4 px-4 font-mono font-medium ${q.status === 'Accepted' ? 'text-indigo-400' : 'text-zinc-300'}`}>{q.id}</td>
+                    <td className={`py-4 px-4 font-mono font-medium ${q.status === 'Accepted' ? 'text-indigo-400' : 'text-zinc-300'}`}>{q.displayId}</td>
                     <td className="py-4 px-4">
                       <div className="font-medium text-zinc-200">{q.client}</div>
                       <div className="text-zinc-500 text-xs mt-0.5">GSTIN: {q.gstin}</div>
@@ -135,29 +164,13 @@ export default function Quotations({ startCreating = false, shopId, userId }: { 
                       {q.status === 'Draft' && <span className="inline-flex items-center px-2 py-1 rounded-full bg-zinc-800 text-zinc-400 text-[10px] uppercase font-semibold border border-zinc-700">Draft</span>}
                       {q.status === 'Expired' && <span className="inline-flex items-center px-2 py-1 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[10px] uppercase font-semibold shadow-[0_0_10px_rgba(244,63,94,0.15)]">Expired</span>}
                     </td>
-                    <td className="py-4 px-4 text-right">
-                      {q.status === 'Accepted' ? (
-                        <button className="bg-teal-500 text-teal-950 px-3 py-1.5 rounded text-xs font-semibold shadow-[0_0_15px_rgba(45,212,191,0.4)] hover:shadow-[0_0_20px_rgba(45,212,191,0.6)] hover:bg-teal-400 transition-colors inline-flex items-center gap-1 border-t border-white/20">
-                          <Receipt size={14} /> Convert to Invoice
+                    <td className="py-4 px-4 text-right flex justify-end gap-3 items-center">
+                      <button onClick={() => handleEdit(q)} className="text-zinc-400 hover:text-indigo-400 transition-colors" title="Edit"><Edit2 size={16} /></button>
+                      <button onClick={() => handleDelete(q.id)} className="text-zinc-400 hover:text-rose-400 transition-colors" title="Delete"><Trash2 size={16} /></button>
+                      {q.status === 'Accepted' && (
+                        <button className="bg-teal-500 text-teal-950 px-3 py-1.5 rounded text-xs font-semibold shadow-[0_0_15px_rgba(45,212,191,0.4)] hover:shadow-[0_0_20px_rgba(45,212,191,0.6)] hover:bg-teal-400 transition-colors inline-flex items-center gap-1 border-t border-white/20 ml-2">
+                          <Receipt size={14} /> Invoice
                         </button>
-                      ) : (
-                        <div className="flex items-center justify-end gap-2 text-zinc-400">
-                          {q.status === 'Sent' && (
-                            <>
-                              <button className="hover:text-indigo-400 transition-colors p-1"><Eye size={18} /></button>
-                              <button className="hover:text-indigo-400 transition-colors p-1"><Mail size={18} /></button>
-                            </>
-                          )}
-                          {q.status === 'Draft' && (
-                            <>
-                              <button className="hover:text-indigo-400 transition-colors p-1"><Edit2 size={18} /></button>
-                              <button className="hover:text-rose-400 transition-colors p-1"><Trash2 size={18} /></button>
-                            </>
-                          )}
-                          {q.status === 'Expired' && (
-                            <button className="hover:text-indigo-400 transition-colors p-1"><Copy size={18} /></button>
-                          )}
-                        </div>
                       )}
                     </td>
                   </tr>

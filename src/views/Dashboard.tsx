@@ -190,12 +190,23 @@ export default function Dashboard({ onViewChange, shopId, userId }: { onViewChan
           <h2 className="text-3xl font-bold text-indigo-300 drop-shadow-[0_0_8px_rgba(165,180,252,0.5)]">Overview</h2>
           <p className="text-zinc-400 mt-2">High-level financial performance and activity.</p>
         </div>
-        <button
-          onClick={() => setIsUnlocked(false)}
-          className="flex items-center gap-2 bg-zinc-900 border border-zinc-700/50 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 px-4 py-2 rounded-lg font-medium transition-colors"
-        >
-          <EyeOff size={16} /> Hide Dashboard
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={async () => {
+              const { generateSalesAndGSTReport } = await import('../utils/ReportGenerator');
+              await generateSalesAndGSTReport(userId, shopId);
+            }}
+            className="flex items-center gap-2 bg-indigo-600/10 border border-indigo-500/50 hover:bg-indigo-600/20 text-indigo-400 px-4 py-2 rounded-lg font-medium transition-colors"
+          >
+            Export Sales & GST Report (PDF)
+          </button>
+          <button
+            onClick={() => setIsUnlocked(false)}
+            className="flex items-center gap-2 bg-zinc-900 border border-zinc-700/50 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 px-4 py-2 rounded-lg font-medium transition-colors"
+          >
+            <EyeOff size={16} /> Hide Dashboard
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

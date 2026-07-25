@@ -133,7 +133,7 @@ export default function Sidebar({ currentView, onViewChange, onOpenExpensesModal
             className="flex items-center cursor-pointer hover:opacity-80 transition-opacity"
             onClick={() => onViewChange('shop-profile')}
           >
-            <div className="w-8 h-8 rounded bg-indigo-500 text-white flex items-center justify-center mr-3 font-bold shadow-[0_0_15px_rgba(99,102,241,0.4)]">M</div>
+            <img src="/Mizan_Bill_3D_Logo.png" alt="Mizan Bill" className="w-10 h-10 mr-3 object-contain" />
             <div>
               <div className="text-xl font-bold text-indigo-400">Mizan Bill</div>
               <div className="text-xs text-zinc-400">GST Management</div>

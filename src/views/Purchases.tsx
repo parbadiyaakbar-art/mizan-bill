@@ -1,16 +1,30 @@
-import { Plus, Search, Filter, Download, ShoppingCart, CheckCircle2, Clock, XCircle, MoreVertical } from 'lucide-react';
+import { Plus, Search, Filter, Download, ShoppingCart, CheckCircle2, Clock, XCircle, MoreVertical, Edit, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import * as db from '../services/FirebaseService';
 import InvoiceForm from '../components/InvoiceForm';
 import { TableSkeleton } from '../components/Skeleton';
+import ReasonPromptModal from '../components/ReasonPromptModal';
 
 export default function Purchases({ startCreating = false, shopId, userId }: { startCreating?: boolean, shopId: string, userId: string }) {
   const [isCreating, setIsCreating] = useState(startCreating);
+  const [editingInvoice, setEditingInvoice] = useState<any>(null);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [auditAction, setAuditAction] = useState<{ type: 'Edit' | 'Delete', invoice: any } | null>(null);
+  const [requireAudit, setRequireAudit] = useState(false);
+
   useEffect(() => {
-    const fetchInvoices = async () => {
+    const checkSettings = async () => {
+      const settings = await db.getBusinessSettings(shopId);
+      if (settings?.requireReasonForEditDelete) {
+        setRequireAudit(true);
+      }
+    };
+    checkSettings();
+  }, [shopId]);
+
+  const fetchInvoices = async () => {
       try {
         const data = await db.getPurchaseInvoices(shopId);
         if (data) {
@@ -20,7 +34,8 @@ export default function Purchases({ startCreating = false, shopId, userId }: { s
             client: b.party_name || 'Generic Supplier',
             amount: b.totals?.invoiceTotal?.toFixed(2) || '0.00',
             status: b.payment_mode === 'Udhaar' ? 'Pending' : 'Paid',
-            due: b.dueDate || '---'
+            due: b.dueDate || '---',
+            raw: b,
           }));
           setInvoices(formatted);
         }
@@ -30,12 +45,74 @@ export default function Purchases({ startCreating = false, shopId, userId }: { s
         setIsLoading(false);
       }
     };
-    
+
+  useEffect(() => {
     if (!isCreating) {
       setIsLoading(true);
       fetchInvoices();
     }
   }, [isCreating, shopId]);
+
+  
+  const handleEdit = (inv: any) => {
+    const userRole = localStorage.getItem('mizan_user_role');
+    const isAdmin = userRole === 'Owner' || userRole === 'Admin';
+
+    if (!isAdmin && requireAudit) {
+      setAuditAction({ type: 'Edit', invoice: inv });
+      return;
+    }
+
+    if (!isAdmin) {
+      alert('Only Admins can edit invoices.');
+      return;
+    }
+
+    setEditingInvoice(inv.raw);
+    setIsCreating(true);
+  };
+
+  const handleDelete = async (inv: any) => {
+    const userRole = localStorage.getItem('mizan_user_role');
+    const isAdmin = userRole === 'Owner' || userRole === 'Admin';
+
+    if (!isAdmin && requireAudit) {
+      setAuditAction({ type: 'Delete', invoice: inv });
+      return;
+    }
+
+    if (!isAdmin) {
+      alert('Only Admins can delete invoices.');
+      return;
+    }
+
+    if (window.confirm('Are you sure you want to delete this purchase bill? Stock and ledger balances will be restored.')) {
+      try {
+        await db.deletePurchaseInvoice(userId, shopId, inv.id);
+        fetchInvoices();
+      } catch (e: any) {
+        alert('Failed to delete: ' + e.message);
+      }
+    }
+  };
+
+  const handleAuditConfirm = async (reason: string, staffName: string) => {
+    if (!auditAction) return;
+
+    if (auditAction.type === 'Delete') {
+      try {
+        await db.deletePurchaseInvoice(userId, shopId, auditAction.invoice.id, reason, staffName);
+        fetchInvoices();
+        setAuditAction(null);
+      } catch (e: any) {
+        alert('Failed to delete: ' + e.message);
+      }
+    } else {
+      setEditingInvoice({ ...auditAction.invoice.raw, auditReason: reason, auditStaffName: staffName });
+      setIsCreating(true);
+      setAuditAction(null);
+    }
+  };
 
   const handleExportCSV = () => {
     // For detailed accounting, we export more comprehensive data
@@ -64,7 +141,7 @@ export default function Purchases({ startCreating = false, shopId, userId }: { s
   };
 
   if (isCreating) {
-    return <InvoiceForm type="purchase" onBack={() => setIsCreating(false)} shopId={shopId} userId={userId} />;
+    return <InvoiceForm type="purchase" onBack={() => { setIsCreating(false); setEditingInvoice(null); fetchInvoices(); }} shopId={shopId} userId={userId} initialInvoice={editingInvoice} />;
   }
 
   if (isLoading) {
@@ -130,8 +207,9 @@ export default function Purchases({ startCreating = false, shopId, userId }: { s
                       {inv.status === 'Paid' && <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-teal-500/20 text-teal-400 border border-teal-500/30 text-[10px] uppercase font-semibold">Paid</span>}
                       {inv.status === 'Pending' && <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 text-[10px] uppercase font-semibold">Pending</span>}
                     </td>
-                    <td className="py-4 px-4 text-right">
-                      <button className="text-zinc-500 hover:text-indigo-400 transition-colors"><MoreVertical size={18} /></button>
+                    <td className="py-4 px-4 text-right flex justify-end gap-3 items-center">
+                      <button onClick={() => handleEdit(inv)} className="text-zinc-400 hover:text-indigo-400 transition-colors" title="Edit"><Edit size={16} /></button>
+                      <button onClick={() => handleDelete(inv)} className="text-zinc-400 hover:text-rose-400 transition-colors" title="Delete"><Trash2 size={16} /></button>
                     </td>
                   </tr>
                 ))}
@@ -140,6 +218,14 @@ export default function Purchases({ startCreating = false, shopId, userId }: { s
           )}
         </div>
       </div>
+
+      <ReasonPromptModal
+        isOpen={!!auditAction}
+        onClose={() => setAuditAction(null)}
+        onConfirm={handleAuditConfirm}
+        title={auditAction?.invoice ? `Bill #${auditAction.invoice.id} - ₹${auditAction.invoice.amount}` : ''}
+        actionType={auditAction?.type || 'Edit'}
+      />
     </div>
   );
 }
